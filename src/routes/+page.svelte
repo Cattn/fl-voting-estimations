@@ -668,10 +668,22 @@
 									>{fmtMargin(outcome.scenarioIpevMargin)}</span
 								></span
 							>
+							<span class="text-muted">+</span>
+							<span
+								>mail <span class={marginClass(forecast.mailMargin)}
+									>{fmtMargin(forecast.mailMargin)}</span
+								></span
+							>
 							<span class="text-muted">→</span>
 							<span
 								>early vote ends <span class={marginClass(scenarioEnd)}
 									>{fmtMargin(scenarioEnd, 2)}</span
+								></span
+							>
+							<span class="text-muted">→</span>
+							<span
+								>Election Day <span class={marginClass(forecast.edMargin)}
+									>{fmtMargin(forecast.edMargin)}</span
 								></span
 							>
 							<span class="text-muted">→</span>
@@ -689,10 +701,22 @@
 										>{fmtMargin(outcome.requiredIpevMargin)}</span
 									></span
 								>
+								<span class="text-muted">+</span>
+								<span
+									>mail <span class={marginClass(forecast.mailMargin)}
+										>{fmtMargin(forecast.mailMargin)}</span
+									></span
+								>
 								<span class="text-muted">→</span>
 								<span
 									>early vote ends <span class={marginClass(benchEnd)}
 										>{fmtMargin(benchEnd, 2)}</span
+									></span
+								>
+								<span class="text-muted">→</span>
+								<span
+									>Election Day <span class={marginClass(forecast.edMargin)}
+										>{fmtMargin(forecast.edMargin)}</span
 									></span
 								>
 								<span class="text-muted">→</span>
