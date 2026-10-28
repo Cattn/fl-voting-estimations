@@ -18,6 +18,7 @@ import {
 	setIpevHoldingTarget,
 	swingToTarget,
 	upgradeForecast,
+	BASELINE,
 	MODEL_VERSION
 } from '../src/lib/model.ts';
 
@@ -333,6 +334,7 @@ describe('locked sliders', () => {
 				...defaults,
 				modelVersion: 2,
 				linked,
+				target: -6,
 				days: defaults.days.map((d) => ({ ...d, margin: legacyShape[d.date] - 7.3 }))
 			};
 			const upgraded = upgradeForecast(ctx, old);
@@ -345,6 +347,31 @@ describe('locked sliders', () => {
 			expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(computeOutcome(ctx, old).margin, 6);
 			expect(upgradeForecast(ctx, upgraded)).toBe(upgraded);
 		}
+	});
+
+	it('resets forecasts still on an older default to the current default', () => {
+		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
+		const defaults = defaultForecast(ctx);
+		const legacy = Object.fromEntries(
+			defaultDays(ctx).map((d) => [d.date, d.date === '2026-11-01' ? d.margin - 35 : d.margin])
+		);
+		const delta = -3.37;
+		const stale = {
+			...defaults,
+			modelVersion: 3,
+			name: 'Mine',
+			today: undefined,
+			mailFinal: defaults.mailFinal - 500,
+			edMargin: BASELINE.edMargin + delta,
+			mailMargin: 4.2 + delta,
+			days: defaults.days.map((d) => ({ ...d, margin: legacy[d.date] + 1.234 }))
+		};
+		expect(upgradeForecast(ctx, stale)).toEqual({ ...defaults, name: 'Mine' });
+		expect(upgradeForecast(ctx, { ...stale, mailMargin: 5 })).not.toEqual({
+			...defaults,
+			name: 'Mine'
+		});
+		expect(upgradeForecast(ctx, { ...stale, target: -7 }).target).toBe(-7);
 	});
 
 	it('leaves forecasts with hand-edited days alone', () => {
@@ -457,6 +484,31 @@ describe('locked sliders', () => {
 			6
 		);
 		expect(computeOutcome(c, swung).todayBenchmark).toBeCloseTo(swung.today!.margin, 6);
+	});
+
+	it('moves the remaining days to hold the target when today beats its benchmark', () => {
+		const feed = countyFeed();
+		const c0 = buildCtx(feed, open('2026-10-28'));
+		const f = holdTarget(c0, { ...rawForecast(c0), target: -8 });
+		const needed = f.today!.margin;
+		const volume = c0.current!.projectedVolume;
+		const dem = Math.round((volume * (1 + (needed + 10) / 100)) / 2);
+		feed.earlyDays.push({
+			date: '2026-10-28',
+			rep: volume - dem,
+			dem,
+			npa: 0,
+			oth: 0,
+			total: volume,
+			counties: [county('DAD', volume - dem, dem)]
+		});
+		const closed = buildCtx(feed, { today: '2026-10-28', pollsClosed: true });
+		expect(computeOutcome(closed, f).cushion).toBeGreaterThan(0);
+		const held = holdTarget(closed, f);
+		expect(computeOutcome(closed, held).margin).toBeCloseTo(-8, 6);
+		expect(held.days[0].margin).toBeLessThan(f.days[0].margin);
+		expect(held.edMargin).toBe(f.edMargin);
+		expect(held.today).toEqual(f.today);
 	});
 
 	it('freezes today once polls close', () => {
