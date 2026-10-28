@@ -7,7 +7,7 @@
 </h3>
 
 <p align="center">
-    <a href="https://fl.cattn.dev/">web</a> · <a href="https://acorn-maple-earth-lake.grok.me/">data</a> · <a href="https://github.com/Cattn/fl-ev-estimations/issues">issues</a>
+    <a href="https://fl.cattn.dev/">web</a> · <a href="https://github.com/Cattn/fl-ev-estimations/issues">issues</a>
 </p>
 
 <p align="center">
