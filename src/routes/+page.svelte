@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
+	import { updated } from '$app/state';
 	import EChart from '#lib/components/EChart.svelte';
 	import CountyMap from '#lib/components/CountyMap.svelte';
 	import MarginInput from '#lib/components/MarginInput.svelte';
@@ -47,6 +48,9 @@
 	let mounted = $state(false);
 
 	const today = $derived(ctx.current);
+	const reportedMail = $derived(
+		feed.mailDays.findLast((d) => d.date <= data.clock.today && d.total > 0)
+	);
 	const todayBenchmark = $derived(currentDayBenchmark(ctx));
 	const history = $derived(buildHistory(feed, data.clock.today));
 	const outcome = $derived(computeOutcome(ctx, forecast));
@@ -160,10 +164,10 @@
 		mounted = true;
 
 		const timer = setInterval(() => {
-			if (document.visibilityState === 'visible') invalidate('app:feed');
+			if (document.visibilityState === 'visible') void refresh();
 		}, AUTO_REFRESH_MS);
 		const onVisible = () => {
-			if (document.visibilityState === 'visible') invalidate('app:feed');
+			if (document.visibilityState === 'visible') void refresh();
 		};
 		document.addEventListener('visibilitychange', onVisible);
 		return () => {
@@ -252,8 +256,14 @@
 	}
 
 	async function refresh() {
+		if (refreshing) return;
 		refreshing = true;
 		try {
+			if (await updated.check().catch(() => false)) {
+				localStorage.setItem('fl-ev-current', JSON.stringify(forecast));
+				location.reload();
+				return;
+			}
 			await invalidate('app:feed');
 		} finally {
 			refreshing = false;
@@ -335,7 +345,7 @@
 				{today}
 				benchmark={todayBenchmark}
 				mailBenchmark={forecast.mailMargin}
-				mail={feed.mailDays.find((d) => d.date === today.date)}
+				mail={reportedMail}
 			/>
 		</div>
 	{/if}
@@ -958,7 +968,7 @@
 						{today}
 						benchmark={todayBenchmark}
 						mailBenchmark={forecast.mailMargin}
-						mail={feed.mailDays.find((d) => d.date === today.date)}
+						mail={reportedMail}
 					/>
 				</div>
 			{/if}
