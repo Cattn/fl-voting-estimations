@@ -72,17 +72,17 @@ describe('reported chart dates', () => {
 			(
 				dailyChartOption(palette, dailyRows).tooltip as { formatter: (params: unknown) => string }
 			).formatter([{ dataIndex: 0 }]);
-		expect(daily()).toContain('Projected full day');
+		expect(daily()).toContain('Needed full day');
 		expect(daily()).toContain('D+0.67 ahead currently');
-		expect(daily()).not.toContain('Expected:');
+		expect(daily()).not.toContain('Needed:');
 		dailyRows[0].reported.margin = -2.34;
 		expect(daily()).toContain('R+0.67 ahead currently');
 		dailyRows[0].reported.margin = -1.67;
-		expect(daily()).toContain('On projection currently');
+		expect(daily()).toContain('On pace currently');
 		dailyRows[0].reported.volume = 0;
-		expect(daily()).not.toContain('Vs. projected:');
+		expect(daily()).not.toContain('Vs. needed:');
 		dailyRows[0].inProgress = false;
-		expect(daily()).not.toContain('Vs. projected:');
+		expect(daily()).not.toContain('Vs. needed:');
 		const nextDay = [{ ...path[0], date: '2026-10-28' }];
 		const rollover = marginChartOption(palette, history, nextDay, nextDay, {
 			scenario: -5,

@@ -289,12 +289,12 @@ export function dailyChartOption(
 				const comparison =
 					delta === null
 						? ''
-						: `<div style="color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">Vs. projected: ${Math.abs(delta) < 0.005 ? 'On projection currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
+						: `<div style="color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">Vs. needed: ${Math.abs(delta) < 0.005 ? 'On pace currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
 				const line = (label: string, x?: DailyRow['reported']) =>
 					x
 						? `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, x.margin)}">${fmtMargin(x.margin)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(x.gap)} lead · ${fmtInt(x.volume)} votes</div>`
 						: '';
-				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.inProgress ? comparison : r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Expected: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Needed full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.inProgress ? comparison : r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Needed: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
 			}
 		},
 		xAxis: {

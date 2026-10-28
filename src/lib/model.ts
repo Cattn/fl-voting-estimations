@@ -269,17 +269,20 @@ export const DEFAULT_TARGET = -8.5;
 export const MODEL_VERSION = 3;
 
 export function defaultForecast(ctx: Ctx): Forecast {
-	const baseline = holdTarget(ctx, {
-		modelVersion: MODEL_VERSION,
-		name: 'Default scenario',
-		target: BASELINE.target,
-		edMargin: BASELINE.edMargin,
-		edTurnout: 2_000_000,
-		mailFinal: defaultMailFinal(ctx.feed),
-		mailMargin: defaultMailMargin(ctx.feed),
-		days: defaultDays(ctx),
-		linked: true
-	});
+	const baseline = holdTarget(
+		ctx,
+		reconcileForecast(ctx, {
+			modelVersion: MODEL_VERSION,
+			name: 'Default scenario',
+			target: BASELINE.target,
+			edMargin: BASELINE.edMargin,
+			edTurnout: 2_000_000,
+			mailFinal: defaultMailFinal(ctx.feed),
+			mailMargin: defaultMailMargin(ctx.feed),
+			days: defaultDays(ctx),
+			linked: true
+		})
+	);
 	return swingToTarget(ctx, baseline, DEFAULT_TARGET);
 }
 
@@ -288,6 +291,66 @@ export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 }
 
 const ipevGap = (days: ForecastDay[]) => days.reduce((a, d) => a + (d.volume * d.margin) / 100, 0);
+
+function todayFromShape(ctx: Ctx, days: ForecastDay[]): number {
+	const base = currentDayBenchmark(ctx)?.margin ?? 0;
+	const shape = defaultDays(ctx);
+	const volume = days.reduce((a, d) => a + d.volume, 0);
+	if (!volume) return base;
+	const swing = days.reduce(
+		(a, d) =>
+			a + d.volume * (d.margin - (shape.find((s) => s.date === d.date)?.margin ?? d.margin)),
+		0
+	);
+	return base + swing / volume;
+}
+
+export function reconcileForecast(ctx: Ctx, f: Forecast): Forecast {
+	const days = reconcileDays(ctx, f.days);
+	const { current } = ctx;
+	if (!current) return { ...f, days, today: undefined };
+	if (f.today?.date === current.date) return { ...f, days };
+	const margin = f.days.find((d) => d.date === current.date)?.margin ?? todayFromShape(ctx, days);
+	return { ...f, days, today: { date: current.date, volume: current.projectedVolume, margin } };
+}
+
+export interface TodayPlan {
+	margin: number;
+	volume: number;
+	restVolume: number;
+	restGap: number;
+	projectedMargin: number;
+	swingable: boolean;
+}
+
+export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | null {
+	const { current } = ctx;
+	if (!current) return null;
+	const volume = current.projectedVolume;
+	const planned =
+		margin ?? (f.today?.date === current.date ? f.today.margin : currentDayBenchmark(ctx)!.margin);
+	if (current.pollsClosed) {
+		return {
+			margin: planned,
+			volume,
+			restVolume: 0,
+			restGap: 0,
+			projectedMargin: current.projectedMargin,
+			swingable: false
+		};
+	}
+	const soFarGap = current.soFar ? current.soFar.dem - current.soFar.rep : 0;
+	const wanted = (volume * planned) / 100 - soFarGap;
+	const restGap = Math.max(-current.restVolume, Math.min(current.restVolume, wanted)) || 0;
+	return {
+		margin: planned,
+		volume,
+		restVolume: current.restVolume,
+		restGap,
+		projectedMargin: volume ? ((soFarGap + restGap) / volume) * 100 : planned,
+		swingable: volume > 0 && Math.abs(wanted) < current.restVolume
+	};
+}
 
 function hasLegacyShape(ctx: Ctx, days: ForecastDay[]): boolean {
 	const offsets = projectDays(ctx.complete, ctx.futureDates, false).map((d) => {
@@ -344,10 +407,12 @@ export interface Outcome {
 	gap: number;
 	margin: number;
 	ipevRemainingVolume: number;
+	swingVolume: number;
 	requiredIpevGap: number;
 	requiredIpevMargin: number;
 	shift: number;
 	benchmarks: (ForecastDay & { gap: number })[];
+	todayBenchmark: number | null;
 	scenarioIpevMargin: number;
 	cushion: number;
 }
@@ -357,6 +422,7 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 	const ipevVol = f.days.reduce((a, d) => a + d.volume, 0);
 	const ipevGap = f.days.reduce((a, d) => a + (d.volume * d.margin) / 100, 0);
 	const mailRem = mailRemaining(ctx, f);
+	const plan = todayPlan(ctx, f);
 
 	const components: Component[] = [
 		{
@@ -378,8 +444,8 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 		components.push({
 			key: 'today',
 			label: `Rest of today (${fmtDay(current.date)})`,
-			volume: current.restVolume,
-			gap: current.restGap,
+			volume: plan!.restVolume,
+			gap: plan!.restGap,
 			projected: true
 		});
 	}
@@ -403,9 +469,12 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 
 	const total = components.reduce((a, c) => a + c.volume, 0);
 	const gap = components.reduce((a, c) => a + c.gap, 0);
-	const fixedGap = gap - ipevGap;
-	const requiredIpevGap = (f.target / 100) * total - fixedGap;
-	const shift = ipevVol ? ((requiredIpevGap - ipevGap) / ipevVol) * 100 : 0;
+	const todayVol = plan?.swingable ? plan.volume : 0;
+	const blockVol = ipevVol + todayVol;
+	const blockGap = ipevGap + (plan?.swingable ? plan.restGap : 0);
+	const requiredBlockGap = (f.target / 100) * total - (gap - blockGap);
+	const shift = blockVol ? ((requiredBlockGap - blockGap) / blockVol) * 100 : 0;
+	const requiredIpevGap = ipevGap + (ipevVol * shift) / 100;
 
 	return {
 		components,
@@ -413,6 +482,7 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 		gap,
 		margin: total ? (gap / total) * 100 : 0,
 		ipevRemainingVolume: ipevVol,
+		swingVolume: blockVol,
 		requiredIpevGap,
 		requiredIpevMargin: ipevVol ? (requiredIpevGap / ipevVol) * 100 : 0,
 		shift,
@@ -420,18 +490,24 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 			const margin = d.margin + shift;
 			return { ...d, margin, gap: (d.volume * margin) / 100 };
 		}),
+		todayBenchmark: plan ? plan.margin + (plan.swingable ? shift : 0) : null,
 		scenarioIpevMargin: ipevVol ? (ipevGap / ipevVol) * 100 : 0,
 		cushion: gap - (f.target / 100) * total
 	};
 }
 
-export function shiftDays(f: Forecast, delta: number): Forecast {
-	return { ...f, days: f.days.map((d) => ({ ...d, margin: d.margin + delta })) };
+export function shiftDays(ctx: Ctx, f: Forecast, delta: number): Forecast {
+	const swingToday = f.today && todayPlan(ctx, f)?.swingable;
+	return {
+		...f,
+		today: swingToday ? { ...f.today!, margin: f.today!.margin + delta } : f.today,
+		days: f.days.map((d) => ({ ...d, margin: d.margin + delta }))
+	};
 }
 
 export function holdTarget(ctx: Ctx, f: Forecast): Forecast {
 	const o = computeOutcome(ctx, f);
-	if (o.ipevRemainingVolume > 0) return shiftDays(f, o.shift);
+	if (o.swingVolume > 0) return shiftDays(ctx, f, o.shift);
 	if (f.edTurnout > 0) return { ...f, edMargin: f.edMargin - (o.cushion / f.edTurnout) * 100 };
 	return f;
 }
@@ -439,10 +515,11 @@ export function holdTarget(ctx: Ctx, f: Forecast): Forecast {
 export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
 	const base = holdTarget(ctx, f);
 	const o = computeOutcome(ctx, base);
-	const swingable = o.ipevRemainingVolume + base.edTurnout + mailRemaining(ctx, base);
+	const swingable = o.swingVolume + base.edTurnout + mailRemaining(ctx, base);
 	if (!swingable) return { ...base, target };
 	const delta = ((target - base.target) * o.total) / swingable;
 	return shiftDays(
+		ctx,
 		{ ...base, target, edMargin: base.edMargin + delta, mailMargin: base.mailMargin + delta },
 		delta
 	);
@@ -450,7 +527,7 @@ export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
 
 export function setIpevHoldingTarget(ctx: Ctx, f: Forecast, ipevMargin: number): Forecast {
 	const o = computeOutcome(ctx, f);
-	const moved = shiftDays(f, ipevMargin - o.scenarioIpevMargin);
+	const moved = shiftDays(ctx, f, ipevMargin - o.scenarioIpevMargin);
 	if (!f.edTurnout) return moved;
 	const cushion = computeOutcome(ctx, moved).cushion;
 	return { ...moved, edMargin: moved.edMargin - (cushion / f.edTurnout) * 100 };
@@ -466,9 +543,11 @@ export interface ProjectedPoint {
 export function projectPath(
 	ctx: Ctx,
 	f: Forecast,
-	days: { date: string; volume: number; margin: number }[]
+	days: { date: string; volume: number; margin: number }[],
+	todayMargin?: number
 ): ProjectedPoint[] {
 	const { feed, current } = ctx;
+	const plan = todayPlan(ctx, f, todayMargin);
 	let total = feed.mail.total + feed.early.total;
 	let gap = feed.mail.dem + feed.early.dem - feed.mail.rep - feed.early.rep;
 	const steps = days.map((d) => ({
@@ -476,8 +555,8 @@ export function projectPath(
 		volume: d.volume,
 		gap: (d.volume * d.margin) / 100
 	}));
-	if (current)
-		steps.unshift({ date: current.date, volume: current.restVolume, gap: current.restGap });
+	if (current && plan)
+		steps.unshift({ date: current.date, volume: plan.restVolume, gap: plan.restGap });
 
 	const n = steps.length || 1;
 	const mailRem = mailRemaining(ctx, f);
