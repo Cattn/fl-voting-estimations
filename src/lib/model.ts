@@ -269,7 +269,9 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 export const BASELINE = { target: -5, edMargin: -10 };
 export const DEFAULT_TARGET = -8.5;
 
-export const MODEL_VERSION = 5;
+export const ED_TURNOUT = 2_600_000;
+
+export const MODEL_VERSION = 6;
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	const baseline = holdTarget(
@@ -279,7 +281,7 @@ export function defaultForecast(ctx: Ctx): Forecast {
 			name: 'Default scenario',
 			target: BASELINE.target,
 			edMargin: BASELINE.edMargin,
-			edTurnout: 2_000_000,
+			edTurnout: ED_TURNOUT,
 			mailFinal: defaultMailFinal(ctx.feed),
 			mailMargin: defaultMailMargin(ctx.feed, ctx.current?.date),
 			days: defaultDays(ctx),
@@ -355,62 +357,9 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 	};
 }
 
-function hasShape(shape: ForecastDay[], days: ForecastDay[]): boolean {
-	const offsets = shape.map((d) => {
-		const saved = days.find((x) => x.date === d.date);
-		return saved ? saved.margin - d.margin : NaN;
-	});
-	if (!offsets.length || offsets.some(Number.isNaN)) return false;
-	return Math.max(...offsets) - Math.min(...offsets) <= 0.15;
-}
-
-function reshapeDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
-	const saved = reconcileDays(ctx, days);
-	const next = defaultDays(ctx).map((d, i) => ({ ...d, volume: saved[i].volume }));
-	const volume = next.reduce((a, d) => a + d.volume, 0);
-	const delta = volume ? ((ipevGap(saved) - ipevGap(next)) / volume) * 100 : 0;
-	return next.map((d) => ({ ...d, margin: d.margin + delta }));
-}
-
-const legacyDays = (ctx: Ctx) => projectDays(ctx.complete, ctx.futureDates, false);
-
-function onlyTargetMoved(ctx: Ctx, f: Forecast): boolean {
-	if (!f.linked) return false;
-	const onTenth = (weight: number) => {
-		const base = (f.mailMargin - weight * (f.edMargin - BASELINE.edMargin)) * 10;
-		return Math.abs(base - Math.round(base)) < 1e-6;
-	};
-	if (!onTenth(1) && !onTenth(MAIL_SWING)) return false;
-	return hasShape(legacyDays(ctx), f.days) || hasShape(defaultDays(ctx), f.days);
-}
-
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	if (onlyTargetMoved(ctx, f)) {
-		return f.target === DEFAULT_TARGET && f.edTurnout === 2_000_000
-			? { ...defaultForecast(ctx), name: f.name }
-			: rebaseForecast(ctx, f);
-	}
-	if (f.linked && (f.modelVersion ?? 1) < 2) return rebaseForecast(ctx, f);
-	if (!hasShape(legacyDays(ctx), f.days)) return { ...f, modelVersion: MODEL_VERSION };
-	return { ...f, modelVersion: MODEL_VERSION, days: reshapeDays(ctx, f.days) };
-}
-
-function rebaseForecast(ctx: Ctx, f: Forecast): Forecast {
-	const defaults = defaultForecast(ctx);
-	const baseline = holdTarget(ctx, {
-		...defaults,
-		name: f.name,
-		edTurnout: f.edTurnout,
-		mailFinal:
-			f.mailFinal ??
-			(f.mailRemaining !== undefined ? ctx.feed.mail.total + f.mailRemaining : defaults.mailFinal),
-		days: defaults.days.map((d) => ({
-			...d,
-			volume: f.days.find((saved) => saved.date === d.date)?.volume ?? d.volume
-		}))
-	});
-	return swingToTarget(ctx, baseline, f.target);
+	return { ...defaultForecast(ctx), name: f.name };
 }
 
 export interface Component {
