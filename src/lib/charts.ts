@@ -41,7 +41,6 @@ export function marginChartOption(
 	const dates = [
 		...new Set([...history.map((h) => h.date), ...scenario.map((s) => s.date)])
 	].sort();
-	const last = history.length - 1;
 
 	type Pt = { value: number; total: number; gap: number; kind: string };
 	const hist: (Pt | null)[] = dates.map((date) => {
@@ -55,13 +54,14 @@ export function marginChartOption(
 				}
 			: null;
 	});
-	const anchor = history[last];
-	const proj = (path: ProjectedPoint[], kind: string): (Pt | null)[] =>
-		dates.map((date) => {
+	const proj = (path: ProjectedPoint[], kind: string): (Pt | null)[] => {
+		const anchor = history.findLast((h) => !path.length || h.date < path[0].date);
+		return dates.map((date) => {
 			const point = path.find((s) => s.date === date);
 			if (point) return { value: point.margin, total: point.total, gap: point.gap, kind };
 			return anchor?.date === date ? hist[dates.indexOf(date)] : null;
 		});
+	};
 
 	const all = [
 		...history.map((h) => h.margin),
@@ -280,7 +280,7 @@ export function dailyChartOption(
 					x
 						? `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, x.margin)}">${fmtMargin(x.margin)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(x.gap)} lead · ${fmtInt(x.volume)} votes</div>`
 						: '';
-				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Pre-day benchmark: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Expected: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
 			}
 		},
 		xAxis: {

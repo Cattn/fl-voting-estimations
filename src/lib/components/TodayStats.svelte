@@ -6,6 +6,7 @@
 	let { today, benchmark }: { today: CurrentDay; benchmark: ForecastDay | null } = $props();
 	const counted = $derived(today.soFar);
 	const margin = $derived(counted?.total ? marginOf(counted) : null);
+	const displayedMargin = $derived(margin ?? benchmark?.margin ?? null);
 	const delta = $derived(margin !== null && benchmark ? margin - benchmark.margin : null);
 	const color = (v: number) => (v < 0 ? 'text-rep' : v > 0 ? 'text-dem' : '');
 </script>
@@ -24,20 +25,20 @@
 	<div class="stats-grid grid grid-cols-2 gap-3 lg:grid-cols-5">
 		<div class="card p-4">
 			<div class="text-muted text-xs font-medium uppercase">Today's margin</div>
-			<div class="num mt-1 text-2xl font-semibold {color(margin ?? 0)}">
-				{margin === null ? '-' : fmtMargin(margin, 2)}
+			<div class="num mt-1 text-2xl font-semibold {color(displayedMargin ?? 0)}">
+				{displayedMargin === null ? '-' : fmtMargin(displayedMargin, 2)}
 			</div>
 			<div class="text-2 mt-1 text-xs">
-				{counted?.total ? 'Of all votes today' : 'Awaiting votes'}
+				{counted?.total ? 'Of all votes today' : 'Projected · awaiting votes'}
 			</div>
 		</div>
 		<div class="card p-4">
 			<div class="text-muted flex items-center text-xs font-medium uppercase">
-				Vs. pre-day benchmark<Info align="left"
-					>Benchmark: {benchmark ? fmtMargin(benchmark.margin, 2) : 'unavailable'}. Reconstructed
-					without today's IPEV counts, using completed days and your target, mail, and Election Day
-					assumptions. Uses the default daily projection, independent of edits to upcoming days. A
-					positive difference favors Democrats; a negative difference favors Republicans.</Info
+				Vs. today's forecast<Info align="left"
+					>Compares today's actual margin with the same daily expectation shown in the table. The
+					expectation uses completed days and stays separate from today's actual counts, including
+					after polls close. A positive difference favors Democrats; a negative difference favors
+					Republicans.</Info
 				>
 			</div>
 			<div class="num mt-1 text-2xl font-semibold {color(delta ?? 0)}">
@@ -51,7 +52,7 @@
 						: `${delta > 0 ? 'D' : 'R'} ahead of benchmark`}
 			</div>
 			{#if benchmark}<div class="text-muted mt-1 text-xs">
-					Reference {fmtMargin(benchmark.margin, 2)}
+					Expected {fmtMargin(benchmark.margin, 2)}
 				</div>{/if}
 		</div>
 		<div class="card p-4">
