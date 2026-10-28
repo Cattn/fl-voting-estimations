@@ -296,7 +296,7 @@
 </script>
 
 <svelte:head>
-	<title>Florida Early Vote Forecaster (2026)</title>
+	<title>Florida Vote Forecaster (2026)</title>
 	<meta
 		name="description"
 		content="Florida 2026 early vote (IPEV + mail) tracker with forecast and daily benchmark builder."
@@ -307,7 +307,7 @@
 	<header class="page-header mb-6 flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">
-				Florida Early Vote Forecaster (2026)
+				Florida Vote Forecaster (2026)
 			</h1>
 			<p class="text-2 mt-1 inline-flex items-center text-sm">
 				Early vote by party
