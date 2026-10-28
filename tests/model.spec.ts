@@ -115,6 +115,26 @@ describe('feed extraction', () => {
 		expect(last.total).toBe(feed.mail.total + feed.early.total);
 		expect(last.gap).toBe(feed.mail.dem + feed.early.dem - feed.mail.rep - feed.early.rep);
 	});
+
+	it('does not rewrite earlier days when later totals change or retained mail is present', () => {
+		const feed = extractFeed(html);
+		const before = buildHistory(feed)[0];
+		feed.mail.rep += 500;
+		feed.mail.total += 500;
+		feed.early.rep += 50;
+		feed.early.total += 50;
+		feed.mailDays.push({
+			date: '2026-10-28',
+			rep: 100,
+			dem: 200,
+			npa: 0,
+			oth: 0,
+			total: 300,
+			retained: true
+		});
+		expect(buildHistory(feed)[0]).toEqual(before);
+		expect(buildHistory(feed).at(-1)!.total).toBe(feed.mail.total + feed.early.total);
+	});
 });
 
 describe('Florida clock', () => {

@@ -49,7 +49,8 @@ describe('today mail retention', () => {
 		for (const mailDays of [[], [{ ...previous.mailDays[0], rep: 0, dem: 0, total: 0 }]]) {
 			const incoming = { ...previous, mailDays };
 			const result = feed.retainTodayMail(incoming, previous, '2026-10-28');
-			expect(result.mailDays).toEqual([{ ...previous.mailDays[0], retained: true }]);
+			expect(result.mailDays).toBe(incoming.mailDays);
+			expect(result.lastReportedMail).toEqual({ ...previous.mailDays[0], retained: true });
 			expect(result.mail).toBe(incoming.mail);
 		}
 	});
@@ -63,6 +64,17 @@ describe('today mail retention', () => {
 			mailDays: [{ ...previous.mailDays[0], rep: 100, dem: 200, total: 500 }]
 		};
 		expect(feed.retainTodayMail(incoming, previous, '2026-10-28')).toBe(incoming);
+	});
+
+	it('retains the display report through repeated omissions without inserting historical votes', async () => {
+		const { feed } = await load();
+		const previous = feed.extractFeed(page);
+		previous.mailDays[0].date = '2026-10-28';
+		const empty = { ...previous, mailDays: [] };
+		const first = feed.retainTodayMail(empty, previous, '2026-10-28');
+		const second = feed.retainTodayMail(empty, first, '2026-10-28');
+		expect(second.lastReportedMail).toEqual(first.lastReportedMail);
+		expect(second.mailDays).toEqual([]);
 	});
 
 	it('never substitutes yesterday or carries counts into the next day', async () => {
