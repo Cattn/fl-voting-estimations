@@ -266,7 +266,7 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 export const BASELINE = { target: -5, edMargin: -10 };
 export const DEFAULT_TARGET = -8.5;
 
-export const MODEL_VERSION = 3;
+export const MODEL_VERSION = 4;
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	const baseline = holdTarget(
@@ -352,8 +352,8 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 	};
 }
 
-function hasLegacyShape(ctx: Ctx, days: ForecastDay[]): boolean {
-	const offsets = projectDays(ctx.complete, ctx.futureDates, false).map((d) => {
+function hasShape(shape: ForecastDay[], days: ForecastDay[]): boolean {
+	const offsets = shape.map((d) => {
 		const saved = days.find((x) => x.date === d.date);
 		return saved ? saved.margin - d.margin : NaN;
 	});
@@ -369,10 +369,20 @@ function reshapeDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 	return next.map((d) => ({ ...d, margin: d.margin + delta }));
 }
 
+const legacyDays = (ctx: Ctx) => projectDays(ctx.complete, ctx.futureDates, false);
+
+function isUntouchedDefault(ctx: Ctx, f: Forecast): boolean {
+	if (!f.linked || f.target !== DEFAULT_TARGET || f.edTurnout !== 2_000_000) return false;
+	const mailBase = f.mailMargin - (f.edMargin - BASELINE.edMargin);
+	if (Math.abs(mailBase * 10 - Math.round(mailBase * 10)) > 1e-6) return false;
+	return hasShape(legacyDays(ctx), f.days) || hasShape(defaultDays(ctx), f.days);
+}
+
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	if (f.linked && f.modelVersion !== 2) return rebaseForecast(ctx, f);
-	if (!hasLegacyShape(ctx, f.days)) return { ...f, modelVersion: MODEL_VERSION };
+	if (isUntouchedDefault(ctx, f)) return { ...defaultForecast(ctx), name: f.name };
+	if (f.linked && (f.modelVersion ?? 1) < 2) return rebaseForecast(ctx, f);
+	if (!hasShape(legacyDays(ctx), f.days)) return { ...f, modelVersion: MODEL_VERSION };
 	return { ...f, modelVersion: MODEL_VERSION, days: reshapeDays(ctx, f.days) };
 }
 
