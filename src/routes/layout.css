@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+	color-scheme: light;
+	--page: #f9f9f7;
+	--surface: #fcfcfb;
+	--ink: #0b0b0b;
+	--ink-2: #52514e;
+	--muted: #898781;
+	--grid: #e1e0d9;
+	--axis: #c3c2b7;
+	--border: rgba(11, 11, 11, 0.1);
+	--dem: #2a78d6;
+	--rep: #e34948;
+	--neutral: #f0efec;
+	--wash: rgba(11, 11, 11, 0.04);
+	font-family:
+		system-ui,
+		-apple-system,
+		'Segoe UI',
+		sans-serif;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--page: #0d0d0d;
+	--surface: #1a1a19;
+	--ink: #f0efec;
+	--ink-2: #c3c2b7;
+	--muted: #898781;
+	--grid: #2c2c2a;
+	--axis: #383835;
+	--border: rgba(255, 255, 255, 0.1);
+	--dem: #3987e5;
+	--rep: #e66767;
+	--neutral: #383835;
+	--wash: rgba(255, 255, 255, 0.05);
+}
+
+html {
+	background: var(--page);
+	color: var(--ink);
+}
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+}
+
+.num {
+	font-variant-numeric: tabular-nums;
+}
+
+.field {
+	background: var(--page);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 0.35rem 0.5rem;
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+}
+
+.field:focus {
+	outline: 2px solid var(--dem);
+	outline-offset: 1px;
+}
+
+.btn {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 0.35rem 0.75rem;
+	font-size: 0.875rem;
+	color: var(--ink);
+	background: var(--surface);
+}
+
+.btn:hover {
+	background: var(--wash);
+}
+
+.btn-primary {
+	background: var(--ink);
+	color: var(--surface);
+	border-color: transparent;
+}
+
+.btn-primary:hover {
+	background: var(--ink-2);
+}
+
+.text-dem {
+	color: var(--dem);
+}
+
+.text-rep {
+	color: var(--rep);
+}
+
+.text-2 {
+	color: var(--ink-2);
+}
+
+.text-muted {
+	color: var(--muted);
+}
+
+.switch {
+	position: relative;
+	width: 32px;
+	height: 18px;
+	border-radius: 999px;
+	background: var(--axis);
+	transition: background 0.15s;
+	flex-shrink: 0;
+}
+
+.switch::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--surface);
+	transition: transform 0.15s;
+}
+
+input:checked + .switch {
+	background: var(--dem);
+}
+
+input:checked + .switch::after {
+	transform: translateX(14px);
+}
+
+input:focus-visible + .switch {
+	outline: 2px solid var(--dem);
+	outline-offset: 2px;
+}

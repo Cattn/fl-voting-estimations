@@ -1,0 +1,24 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "fl-ev",
+	"account_id": "fcbd3526f9033b92ddbf3725c0ba340b",
+	"main": "worker.js",
+	"workers_dev": false,
+	"routes": [{ "pattern": "fl.cattn.dev", "custom_domain": true }],
+	"triggers": { "crons": ["*/3 * * * *"] },
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "FEED_CACHE",
+			"id": "4c94b4d74f484d1497e5332979cabb81"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
