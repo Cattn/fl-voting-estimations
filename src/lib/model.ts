@@ -65,34 +65,42 @@ export interface HistoryPoint {
 	dayIpev: DayCounts;
 }
 
-export function buildHistory(feed: FeedData): HistoryPoint[] {
-	return feed.earlyDays.map((d) => {
-		const laterEarly = sum(feed.earlyDays.filter((x) => x.date > d.date));
-		const laterMail = sum(feed.mailDays.filter((x) => x.date > d.date));
-		const early = {
-			...feed.early,
-			rep: feed.early.rep - laterEarly.rep,
-			dem: feed.early.dem - laterEarly.dem,
-			total: feed.early.total - laterEarly.total
-		};
-		const mail = {
-			...feed.mail,
-			rep: feed.mail.rep - laterMail.rep,
-			dem: feed.mail.dem - laterMail.dem,
-			total: feed.mail.total - laterMail.total
-		};
-		const total = early.total + mail.total;
-		const gap = early.dem + mail.dem - early.rep - mail.rep;
-		return {
-			date: d.date,
-			total,
-			gap,
-			margin: total ? (gap / total) * 100 : 0,
-			ipevTotal: early.total,
-			mailTotal: mail.total,
-			dayIpev: d
-		};
-	});
+export function buildHistory(feed: FeedData, asOfDate?: string): HistoryPoint[] {
+	return feed.earlyDays
+		.filter(
+			(d) =>
+				!asOfDate ||
+				d.date < asOfDate ||
+				(d.date === asOfDate &&
+					(d.total > 0 || feed.mailDays.some((m) => m.date === d.date && m.total > 0)))
+		)
+		.map((d) => {
+			const laterEarly = sum(feed.earlyDays.filter((x) => x.date > d.date));
+			const laterMail = sum(feed.mailDays.filter((x) => x.date > d.date));
+			const early = {
+				...feed.early,
+				rep: feed.early.rep - laterEarly.rep,
+				dem: feed.early.dem - laterEarly.dem,
+				total: feed.early.total - laterEarly.total
+			};
+			const mail = {
+				...feed.mail,
+				rep: feed.mail.rep - laterMail.rep,
+				dem: feed.mail.dem - laterMail.dem,
+				total: feed.mail.total - laterMail.total
+			};
+			const total = early.total + mail.total;
+			const gap = early.dem + mail.dem - early.rep - mail.rep;
+			return {
+				date: d.date,
+				total,
+				gap,
+				margin: total ? (gap / total) * 100 : 0,
+				ipevTotal: early.total,
+				mailTotal: mail.total,
+				dayIpev: d
+			};
+		});
 }
 
 export const POLLS_CLOSED_HOUR_ET = 21;
@@ -213,23 +221,9 @@ export function defaultDays(ctx: Ctx): ForecastDay[] {
 	return projectDays(ctx.complete, ctx.futureDates);
 }
 
-export function currentDayBenchmark(ctx: Ctx, forecast: Forecast): ForecastDay | null {
+export function currentDayBenchmark(ctx: Ctx): ForecastDay | null {
 	if (!ctx.current) return null;
-	const counted = ctx.current.soFar;
-	const early = { ...ctx.feed.early };
-	if (counted) {
-		for (const key of ['rep', 'dem', 'npa', 'oth', 'total'] as const) early[key] -= counted[key];
-	}
-	const beforeToday: Ctx = {
-		...ctx,
-		feed: { ...ctx.feed, early },
-		current: null,
-		futureDates: [ctx.current.date, ...ctx.futureDates]
-	};
-	return (
-		computeOutcome(beforeToday, { ...forecast, days: defaultDays(beforeToday) }).benchmarks[0] ??
-		null
-	);
+	return projectDays(ctx.complete, [ctx.current.date])[0] ?? null;
 }
 
 export function defaultMailMargin(feed: FeedData): number {

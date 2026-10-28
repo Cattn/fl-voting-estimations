@@ -47,8 +47,8 @@
 	let mounted = $state(false);
 
 	const today = $derived(ctx.current);
-	const todayBenchmark = $derived(currentDayBenchmark(ctx, forecast));
-	const history = $derived(buildHistory(feed).filter((h) => h.date <= data.clock.today));
+	const todayBenchmark = $derived(currentDayBenchmark(ctx));
+	const history = $derived(buildHistory(feed, data.clock.today));
 	const outcome = $derived(computeOutcome(ctx, forecast));
 	const scenarioPath = $derived(projectPath(ctx, forecast, forecast.days));
 	const benchmarkPath = $derived(projectPath(ctx, forecast, outcome.benchmarks));
@@ -102,7 +102,7 @@
 									volume: today.projectedVolume,
 									gap: (today.projectedVolume * today.projectedMargin) / 100
 								},
-						reported: today.soFar
+						reported: today.soFar?.total
 							? {
 									margin: marginOf(today.soFar),
 									volume: today.soFar.total,
@@ -852,6 +852,14 @@
 								</tr>
 							{/each}
 							{#if today}
+								{@const hasCounts = (today.soFar?.total ?? 0) > 0}
+								{@const expectedMargin = todayBenchmark?.margin ?? today.projectedMargin}
+								{@const expectedVolume = todayBenchmark?.volume ?? today.projectedVolume}
+								{@const rowMargin = hasCounts ? marginOf(today.soFar!) : expectedMargin}
+								{@const rowGap = hasCounts
+									? today.soFar!.dem - today.soFar!.rep
+									: (expectedVolume * expectedMargin) / 100}
+								{@const runningMargin = hasCounts ? live.margin : scenarioPath[0].margin}
 								<tr
 									class="border-t"
 									style:border-color="var(--border)"
@@ -860,38 +868,42 @@
 									<td class="py-1.5 whitespace-nowrap">
 										{fmtDay(today.date, true)}
 										<span class="text-muted block text-xs">
-											{today.soFar
+											{hasCounts
 												? today.pollsClosed
 													? 'Reported · late uploads possible'
 													: 'Reported so far · in progress'
-												: 'in progress · none reported yet'}
+												: 'Projected · awaiting first counts'}
 										</span>
 									</td>
 									<td class="text-right">
-										{fmtInt(today.soFar?.total ?? 0)}
-										{#if !today.pollsClosed}<span class="text-muted block text-xs"
+										{fmtInt(hasCounts ? today.soFar!.total : expectedVolume)}
+										{#if hasCounts && !today.pollsClosed}<span class="text-muted block text-xs"
 												>Est. {fmtInt(today.projectedVolume)}</span
 											>{/if}
 									</td>
-									<td class="text-right {marginClass(today.soFar ? marginOf(today.soFar) : 0)}">
-										{today.soFar?.total ? fmtMargin(marginOf(today.soFar)) : '-'}
-										{#if todayBenchmark}<span class="text-muted block text-xs"
-												>Pre-day {fmtMargin(todayBenchmark.margin, 2)}</span
+									<td class="text-right {marginClass(rowMargin)}">
+										{fmtMargin(rowMargin)}
+										{#if hasCounts && todayBenchmark}<span class="text-muted block text-xs"
+												>Expected {fmtMargin(todayBenchmark.margin, 2)}</span
 											>{/if}
 									</td>
 									<td class="text-right">
-										{today.soFar ? fmtLead(today.soFar.dem - today.soFar.rep) : '-'}
+										{fmtLead(rowGap)}
 									</td>
 									{#if !forecast.linked}
 										<td class="text-muted text-right"
 											>{todayBenchmark ? fmtMargin(todayBenchmark.margin, 2) : '-'}<span
-												class="block text-xs">pre-day reference</span
+												class="block text-xs">daily expectation</span
 											></td
 										>
-										<td class="text-muted text-right">-</td>
+										<td class="text-muted text-right"
+											>{todayBenchmark
+												? fmtLead((todayBenchmark.volume * todayBenchmark.margin) / 100)
+												: '-'}</td
+										>
 									{/if}
-									<td class="text-right {marginClass(live.margin)}">
-										{fmtMargin(live.margin, 2)}
+									<td class="text-right {marginClass(runningMargin)}">
+										{fmtMargin(runningMargin, 2)}
 									</td>
 								</tr>
 							{/if}
@@ -930,7 +942,8 @@
 					</table>
 				</div>
 				<p class="text-muted mt-3 pb-1 text-xs">
-					Shaded rows include projections. Pre-day is today's comparison reference.
+					Shaded rows include projections. Today's benchmark is the same daily expectation used in
+					the cards.
 				</p>
 			</section>
 

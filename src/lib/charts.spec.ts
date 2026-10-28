@@ -39,5 +39,19 @@ describe('reported chart dates', () => {
 		const series = option.series as { data: { value: number; kind: string }[] }[];
 		expect(series[0].data[0]).toMatchObject({ value: -10, kind: 'Reported so far' });
 		expect(series[1].data[0]).toMatchObject({ value: -15, kind: 'Your scenario' });
+		const nextDay = [{ ...path[0], date: '2026-10-28' }];
+		const rollover = marginChartOption(palette, history, nextDay, nextDay, {
+			scenario: -5,
+			target: -5,
+			showBenchmark: true,
+			inProgressDate: '2026-10-28'
+		});
+		const rolloverSeries = rollover.series as {
+			data: ({ value: number; kind: string } | null)[];
+		}[];
+		expect(rolloverSeries[0].data[1]).toBeNull();
+		expect(rolloverSeries[1].data[0]).toMatchObject({ value: -10, kind: 'Reported' });
+		expect(rolloverSeries[1].data[1]).toMatchObject({ value: -15, kind: 'Your scenario' });
+		expect(rolloverSeries[2].data[0]).toMatchObject({ value: -10, kind: 'Reported' });
 	});
 });

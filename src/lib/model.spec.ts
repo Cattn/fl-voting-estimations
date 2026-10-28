@@ -41,32 +41,49 @@ describe('current-day benchmark', () => {
 			forecast.target,
 			6
 		);
-		expect(currentDayBenchmark(after, reconciled)?.date).toBe('2026-10-28');
+		expect(currentDayBenchmark(after)?.date).toBe('2026-10-28');
 	});
-	it('ignores today counts and upcoming-day edits when reconstructing the target', () => {
+	it('keeps the daily expectation independent of actual counts', () => {
 		const feed = extractFeed(html);
 		const ctx = buildCtx(feed, open('2026-10-27'));
-		const forecast = defaultForecast(ctx);
-		const initial = currentDayBenchmark(ctx, forecast);
+		const initial = currentDayBenchmark(ctx);
 		const changed = structuredClone(feed);
 		changed.early.dem += 100;
 		changed.early.rep -= 100;
 		changed.earlyDays[1].dem += 100;
 		changed.earlyDays[1].rep -= 100;
-		const alteredForecast = { ...forecast, days: forecast.days.map((d) => ({ ...d, margin: 30 })) };
-		expect(currentDayBenchmark(buildCtx(changed, open('2026-10-27')), alteredForecast)).toEqual(
-			initial
-		);
+		expect(currentDayBenchmark(buildCtx(changed, open('2026-10-27')))).toEqual(initial);
 		expect(initial?.date).toBe('2026-10-27');
+		expect(
+			currentDayBenchmark(buildCtx(changed, { today: '2026-10-27', pollsClosed: true }))
+		).toEqual(initial);
+	});
+
+	it('uses the same forecast as the projected table row before counting starts', () => {
+		const ctx = buildCtx(extractFeed(html), open('2026-10-28'));
+		const expected = currentDayBenchmark(ctx)!;
+		expect(expected.margin).toBe(ctx.current!.projectedMargin);
+		expect(expected.volume).toBe(ctx.current!.projectedVolume);
 	});
 
 	it('has no current-day benchmark after early voting ends', () => {
 		const ctx = buildCtx(extractFeed(html), open('2026-11-02'));
-		expect(currentDayBenchmark(ctx, defaultForecast(ctx))).toBeNull();
+		expect(currentDayBenchmark(ctx)).toBeNull();
 	});
 });
 
 describe('feed extraction', () => {
+	it('excludes an empty new day from reported history until votes arrive', () => {
+		const feed = extractFeed(html);
+		feed.earlyDays.push({ date: '2026-10-28', rep: 0, dem: 0, npa: 0, oth: 0, total: 0 });
+		feed.mailDays.push({ date: '2026-10-28', rep: 0, dem: 0, npa: 0, oth: 0, total: 0 });
+		expect(buildHistory(feed, '2026-10-28').at(-1)?.date).toBe('2026-10-27');
+		feed.earlyDays.at(-1)!.total = 1;
+		feed.earlyDays.at(-1)!.rep = 1;
+		feed.early.total += 1;
+		feed.early.rep += 1;
+		expect(buildHistory(feed, '2026-10-28').at(-1)?.date).toBe('2026-10-28');
+	});
 	it('parses the serialized payload without executing it', () => {
 		const feed = extractFeed(html);
 		expect(feed.windowOpen).toBe(true);
