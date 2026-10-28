@@ -250,18 +250,19 @@ describe('locked sliders', () => {
 		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(old.target, 6);
 	});
 
-	it('starts from the R+5 / R+10 baseline exactly on target', () => {
+	it('starts from the R+8.5 / R+10 baseline exactly on target', () => {
 		const f = defaultForecast(ctx);
+		expect(f.target).toBe(-8.5);
 		expect(f.edMargin).toBe(-10);
-		expect(computeOutcome(ctx, f).margin).toBeCloseTo(-5, 6);
+		expect(computeOutcome(ctx, f).margin).toBeCloseTo(-8.5, 6);
 	});
 
 	it('swings ED, future IPEV, and remaining mail by the same amount to hit a new target', () => {
 		const f = defaultForecast(ctx);
 		const before = computeOutcome(ctx, f).scenarioIpevMargin;
-		const g = swingToTarget(ctx, f, -8);
+		const g = swingToTarget(ctx, f, -10);
 		const o = computeOutcome(ctx, g);
-		expect(o.margin).toBeCloseTo(-8, 6);
+		expect(o.margin).toBeCloseTo(-10, 6);
 		expect(o.scenarioIpevMargin - before).toBeCloseTo(g.edMargin - f.edMargin, 6);
 		expect(g.mailMargin - f.mailMargin).toBeCloseTo(g.edMargin - f.edMargin, 6);
 		expect(g.mailFinal).toBe(f.mailFinal);
@@ -286,10 +287,10 @@ describe('locked sliders', () => {
 		const f = defaultForecast(ctx);
 		const a = setIpevHoldingTarget(ctx, f, -2);
 		expect(computeOutcome(ctx, a).scenarioIpevMargin).toBeCloseTo(-2, 6);
-		expect(computeOutcome(ctx, a).margin).toBeCloseTo(-5, 6);
+		expect(computeOutcome(ctx, a).margin).toBeCloseTo(f.target, 6);
 		const b = holdTarget(ctx, { ...f, edMargin: -20 });
 		expect(b.edMargin).toBe(-20);
-		expect(computeOutcome(ctx, b).margin).toBeCloseTo(-5, 6);
+		expect(computeOutcome(ctx, b).margin).toBeCloseTo(f.target, 6);
 	});
 
 	it('never moves the locked current day', () => {
