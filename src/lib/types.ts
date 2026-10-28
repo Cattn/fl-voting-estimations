@@ -45,6 +45,7 @@ export interface ForecastDay {
 }
 
 export interface Forecast {
+	modelVersion?: number;
 	name: string;
 	target: number;
 	edMargin: number;
