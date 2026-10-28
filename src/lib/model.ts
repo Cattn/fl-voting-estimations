@@ -499,12 +499,29 @@ export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
 	);
 }
 
+export const ED_RANGE = { min: -40, max: 10 };
+export const IPEV_RANGE = { min: -30, max: 20 };
+
+const clamp = (v: number, range: { min: number; max: number }) =>
+	Math.min(range.max, Math.max(range.min, v));
+
 export function setIpevHoldingTarget(ctx: Ctx, f: Forecast, ipevMargin: number): Forecast {
 	const o = computeOutcome(ctx, f);
-	const moved = shiftDays(ctx, f, ipevMargin - o.scenarioIpevMargin);
+	const moved = shiftDays(ctx, f, clamp(ipevMargin, IPEV_RANGE) - o.scenarioIpevMargin);
 	if (!f.edTurnout) return moved;
 	const cushion = computeOutcome(ctx, moved).cushion;
-	return { ...moved, edMargin: moved.edMargin - (cushion / f.edTurnout) * 100 };
+	const edMargin = moved.edMargin - (cushion / f.edTurnout) * 100;
+	const bounded = clamp(edMargin, ED_RANGE);
+	if (bounded === edMargin) return { ...moved, edMargin };
+	return holdTarget(ctx, { ...moved, edMargin: bounded });
+}
+
+export function setEdHoldingTarget(ctx: Ctx, f: Forecast, edMargin: number): Forecast {
+	const held = holdTarget(ctx, { ...f, edMargin: clamp(edMargin, ED_RANGE) });
+	const o = computeOutcome(ctx, held);
+	if (!o.ipevRemainingVolume) return held;
+	const ipev = clamp(o.scenarioIpevMargin, IPEV_RANGE);
+	return ipev === o.scenarioIpevMargin ? held : setIpevHoldingTarget(ctx, held, ipev);
 }
 
 export interface ProjectedPoint {

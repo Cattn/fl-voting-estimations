@@ -15,16 +15,19 @@
 		buildHistory,
 		computeOutcome,
 		defaultForecast,
+		ED_RANGE,
 		fmtDay,
 		fmtInt,
 		fmtLead,
 		fmtMargin,
 		holdTarget,
+		IPEV_RANGE,
 		mailRemaining,
 		marginOf,
 		projectPath,
 		reconcileForecast,
 		REGISTRATION,
+		setEdHoldingTarget,
 		setIpevHoldingTarget,
 		shiftDays,
 		swingToTarget,
@@ -225,6 +228,11 @@
 	function setTarget(v: number) {
 		if (forecast.linked) forecast = swingToTarget(ctx, $state.snapshot(forecast), v);
 		else forecast.target = v;
+	}
+
+	function setEdMargin(v: number) {
+		if (forecast.linked) forecast = setEdHoldingTarget(ctx, $state.snapshot(forecast), v);
+		else forecast.edMargin = v;
 	}
 
 	function setIpevMargin(v: number) {
@@ -448,7 +456,12 @@
 				{/snippet}
 			</MarginSlider>
 
-			<MarginSlider label="Election Day margin" bind:value={forecast.edMargin} min={-40} max={10}>
+			<MarginSlider
+				label="Election Day margin"
+				bind:value={() => forecast.edMargin, setEdMargin}
+				min={ED_RANGE.min}
+				max={ED_RANGE.max}
+			>
 				{#snippet info()}
 					Party margin of Election Day voters. Turnout ({fmtInt(forecast.edTurnout)}) is under
 					Advanced.
@@ -459,8 +472,8 @@
 				<MarginSlider
 					label="Remaining IPEV margin"
 					bind:value={() => outcome.scenarioIpevMargin, setIpevMargin}
-					min={-30}
-					max={20}
+					min={IPEV_RANGE.min}
+					max={IPEV_RANGE.max}
 				>
 					{#snippet hint()}
 						{fmtInt(outcome.ipevRemainingVolume)} votes left
