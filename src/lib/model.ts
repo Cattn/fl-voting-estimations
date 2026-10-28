@@ -242,6 +242,7 @@ export const BASELINE = { target: -5, edMargin: -10 };
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	return holdTarget(ctx, {
+		modelVersion: 1,
 		name: 'Default scenario',
 		target: BASELINE.target,
 		edMargin: BASELINE.edMargin,
@@ -255,6 +256,24 @@ export function defaultForecast(ctx: Ctx): Forecast {
 
 export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 	return defaultDays(ctx).map((d) => days.find((x) => x.date === d.date) ?? d);
+}
+
+export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
+	if (!f.linked || f.modelVersion === 1) return f;
+	const defaults = defaultForecast(ctx);
+	const baseline = holdTarget(ctx, {
+		...defaults,
+		name: f.name,
+		edTurnout: f.edTurnout,
+		mailFinal:
+			f.mailFinal ??
+			(f.mailRemaining !== undefined ? ctx.feed.mail.total + f.mailRemaining : defaults.mailFinal),
+		days: defaults.days.map((d) => ({
+			...d,
+			volume: f.days.find((saved) => saved.date === d.date)?.volume ?? d.volume
+		}))
+	});
+	return swingToTarget(ctx, baseline, f.target);
 }
 
 export interface Component {

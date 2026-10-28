@@ -28,7 +28,8 @@
 		REGISTRATION,
 		setIpevHoldingTarget,
 		shiftDays,
-		swingToTarget
+		swingToTarget,
+		upgradeForecast
 	} from '#lib/model.ts';
 	import { decodeForecast, encodeForecast, loadSaved, storeSaved } from '#lib/saved.ts';
 	import { theme } from '#lib/theme.svelte.ts';
@@ -147,7 +148,8 @@
 
 	onMount(() => {
 		theme.init();
-		saved = loadSaved();
+		saved = loadSaved().map((f) => upgradeForecast(ctx, f));
+		storeSaved(saved);
 		const fromHash = new URLSearchParams(location.hash.slice(1)).get('f');
 		const shared = fromHash ? decodeForecast(fromHash) : null;
 		const stored = (() => {
@@ -194,6 +196,7 @@
 	});
 
 	function applyForecast(f: Forecast) {
+		f = upgradeForecast(ctx, f);
 		const base = defaultForecast(ctx);
 		const mailFinal =
 			f.mailFinal ??

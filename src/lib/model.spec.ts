@@ -12,7 +12,8 @@ import {
 	mailRemaining,
 	reconcileDays,
 	setIpevHoldingTarget,
-	swingToTarget
+	swingToTarget,
+	upgradeForecast
 } from './model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -214,6 +215,40 @@ describe('forecast', () => {
 
 describe('locked sliders', () => {
 	const ctx = buildCtx(extractFeed(html), open('2026-10-28'));
+
+	it('rebases old linked forecasts from defaults before applying their saved target', () => {
+		const baseline = defaultForecast(ctx);
+		const old = {
+			...baseline,
+			modelVersion: undefined,
+			target: -8,
+			edMargin: -25,
+			mailMargin: 20,
+			days: baseline.days.map((d) => ({ ...d, margin: -30 }))
+		};
+		const upgraded = upgradeForecast(ctx, old);
+		expect(upgraded).toEqual(swingToTarget(ctx, baseline, -8));
+		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(-8, 6);
+		expect(upgradeForecast(ctx, upgraded)).toBe(upgraded);
+	});
+
+	it('preserves unlocked scenarios and turnout assumptions during migration', () => {
+		const defaults = defaultForecast(ctx);
+		const unlocked = { ...defaults, modelVersion: undefined, linked: false };
+		expect(upgradeForecast(ctx, unlocked)).toBe(unlocked);
+		const old = {
+			...defaults,
+			modelVersion: undefined,
+			edTurnout: 3000000,
+			mailFinal: 5000,
+			days: defaults.days.map((d) => ({ ...d, volume: 50000 }))
+		};
+		const upgraded = upgradeForecast(ctx, old);
+		expect(upgraded.edTurnout).toBe(old.edTurnout);
+		expect(upgraded.mailFinal).toBe(old.mailFinal);
+		expect(upgraded.days.map((d) => d.volume)).toEqual(old.days.map((d) => d.volume));
+		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(old.target, 6);
+	});
 
 	it('starts from the R+5 / R+10 baseline exactly on target', () => {
 		const f = defaultForecast(ctx);
