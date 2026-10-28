@@ -413,8 +413,9 @@
 						Lock to target
 					</label>
 					<Info align="right">
-						When on, the final always equals your target. Moving the target shifts Election Day and
-						remaining IPEV by the same amount; moving either one re-solves the other.
+						When on, the final always equals your target. Moving the target shifts the margins for
+						Election Day, remaining IPEV, and remaining mail by the same amount. Moving Election Day
+						or IPEV alone re-solves the other.
 					</Info>
 				</span>
 			</div>
