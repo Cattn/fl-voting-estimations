@@ -75,20 +75,11 @@ export function buildHistory(feed: FeedData, asOfDate?: string): HistoryPoint[] 
 					(d.total > 0 || feed.mailDays.some((m) => m.date === d.date && m.total > 0)))
 		)
 		.map((d) => {
-			const laterEarly = sum(feed.earlyDays.filter((x) => x.date > d.date));
-			const laterMail = sum(feed.mailDays.filter((x) => x.date > d.date));
-			const early = {
-				...feed.early,
-				rep: feed.early.rep - laterEarly.rep,
-				dem: feed.early.dem - laterEarly.dem,
-				total: feed.early.total - laterEarly.total
-			};
-			const mail = {
-				...feed.mail,
-				rep: feed.mail.rep - laterMail.rep,
-				dem: feed.mail.dem - laterMail.dem,
-				total: feed.mail.total - laterMail.total
-			};
+			const latest = d.date === feed.earlyDays.at(-1)?.date;
+			const early = latest ? feed.early : sum(feed.earlyDays.filter((x) => x.date <= d.date));
+			const mail = latest
+				? feed.mail
+				: sum(feed.mailDays.filter((x) => x.date <= d.date && !x.retained));
 			const total = early.total + mail.total;
 			const gap = early.dem + mail.dem - early.rep - mail.rep;
 			return {

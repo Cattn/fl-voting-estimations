@@ -36,6 +36,7 @@ export interface FeedData {
 	counties: County[];
 	earlyDays: DayCounts[];
 	mailDays: DayCounts[];
+	lastReportedMail?: DayCounts;
 }
 
 export interface ForecastDay {

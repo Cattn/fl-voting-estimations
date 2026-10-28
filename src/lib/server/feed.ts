@@ -67,14 +67,13 @@ export function retainTodayMail(
 	today = floridaClock().today
 ): FeedData {
 	if (data.mailDays.some((d) => d.date === today && d.total > 0)) return data;
-	const reported = previous?.mailDays.find((d) => d.date === today && d.total > 0);
+	const reported =
+		previous?.mailDays.find((d) => d.date === today && d.total > 0) ??
+		(previous?.lastReportedMail?.date === today ? previous.lastReportedMail : undefined);
 	if (!reported) return data;
 	return {
 		...data,
-		mailDays: [
-			...data.mailDays.filter((d) => d.date !== today),
-			{ ...reported, retained: true }
-		].sort((a, b) => a.date.localeCompare(b.date))
+		lastReportedMail: { ...reported, retained: true }
 	};
 }
 
