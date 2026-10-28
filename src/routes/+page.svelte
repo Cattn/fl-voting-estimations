@@ -7,11 +7,13 @@
 	import MarginSlider from '#lib/components/MarginSlider.svelte';
 	import LegendToggle from '#lib/components/LegendToggle.svelte';
 	import Info from '#lib/components/Info.svelte';
+	import TodayStats from '#lib/components/TodayStats.svelte';
 	import { dailyChartOption, marginChartOption, type DailyRow } from '#lib/charts.ts';
 	import {
 		buildCtx,
 		buildHistory,
 		computeOutcome,
+		currentDayBenchmark,
 		defaultForecast,
 		fmtDay,
 		fmtInt,
@@ -45,7 +47,8 @@
 	let mounted = $state(false);
 
 	const today = $derived(ctx.current);
-	const history = $derived(buildHistory(feed).filter((h) => !today || h.date < today.date));
+	const todayBenchmark = $derived(currentDayBenchmark(ctx, forecast));
+	const history = $derived(buildHistory(feed).filter((h) => h.date <= data.clock.today));
 	const outcome = $derived(computeOutcome(ctx, forecast));
 	const scenarioPath = $derived(projectPath(ctx, forecast, forecast.days));
 	const benchmarkPath = $derived(projectPath(ctx, forecast, outcome.benchmarks));
@@ -74,7 +77,8 @@
 			{
 				scenario: outcome.margin,
 				target: forecast.target,
-				showBenchmark: !forecast.linked
+				showBenchmark: !forecast.linked,
+				inProgressDate: today && !today.pollsClosed ? today.date : undefined
 			},
 			visible(marginHidden)
 		)
@@ -89,13 +93,16 @@
 			? [
 					{
 						date: today.date,
-						inProgress: true,
-						scenario: {
-							margin: today.projectedMargin,
-							volume: today.projectedVolume,
-							gap: (today.projectedVolume * today.projectedMargin) / 100
-						},
-						soFar: today.soFar
+						inProgress: !today.pollsClosed,
+						reference: todayBenchmark?.margin,
+						scenario: today.pollsClosed
+							? undefined
+							: {
+									margin: today.projectedMargin,
+									volume: today.projectedVolume,
+									gap: (today.projectedVolume * today.projectedMargin) / 100
+								},
+						reported: today.soFar
 							? {
 									margin: marginOf(today.soFar),
 									volume: today.soFar.total,
@@ -322,6 +329,12 @@
 		{/if}
 	</header>
 
+	{#if today}
+		<div class="mb-3 hidden md:block">
+			<TodayStats {today} benchmark={todayBenchmark} />
+		</div>
+	{/if}
+
 	<section class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Headline numbers">
 		<div class="card p-4">
 			<div class="text-muted flex items-center text-xs font-medium tracking-wide uppercase">
@@ -378,7 +391,7 @@
 
 	<div class="grid gap-6 lg:grid-cols-[360px_1fr]">
 		<aside class="card h-fit p-4 lg:sticky lg:top-4" aria-label="Forecast inputs">
-			<div class="mb-4 flex items-center justify-between gap-2">
+			<div class="forecast-controls mb-4 flex items-center justify-between gap-2">
 				<h2 class="text-base font-semibold">Make a forecast</h2>
 				<span class="inline-flex items-center">
 					<label class="text-2 flex cursor-pointer items-center gap-2 text-sm">
@@ -513,35 +526,37 @@
 							last 3 weekdays, adjusted for weekends.
 						</Info>
 					</div>
-					<table class="num w-full text-sm">
-						<thead>
-							<tr class="text-muted text-left text-xs">
-								<th class="pb-1 font-medium">Day</th>
-								<th class="pb-1 font-medium">Votes</th>
-								<th class="pb-1 font-medium">Margin</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each forecast.days as d (d.date)}
-								<tr>
-									<td class="pr-2 whitespace-nowrap">{fmtDay(d.date, true)}</td>
-									<td class="py-0.5 pr-1">
-										<input
-											class="field w-24"
-											type="number"
-											step="5000"
-											min="0"
-											aria-label="{fmtDay(d.date)} votes"
-											bind:value={d.volume}
-										/>
-									</td>
-									<td class="py-0.5">
-										<MarginInput label={fmtDay(d.date)} bind:value={d.margin} compact />
-									</td>
+					<div class="daily-inputs overflow-x-auto">
+						<table class="num w-full text-sm">
+							<thead>
+								<tr class="text-muted text-left text-xs">
+									<th class="pb-1 font-medium">Day</th>
+									<th class="pb-1 font-medium">Votes</th>
+									<th class="pb-1 font-medium">Margin</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{#each forecast.days as d (d.date)}
+									<tr>
+										<td class="pr-2 whitespace-nowrap">{fmtDay(d.date, true)}</td>
+										<td class="py-0.5 pr-1">
+											<input
+												class="field w-24"
+												type="number"
+												step="5000"
+												min="0"
+												aria-label="{fmtDay(d.date)} votes"
+												bind:value={d.volume}
+											/>
+										</td>
+										<td class="py-0.5">
+											<MarginInput label={fmtDay(d.date)} bind:value={d.margin} compact />
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 					<button class="btn mt-2" onclick={resetDays}>Reset days</button>
 				{/if}
 			</details>
@@ -588,7 +603,8 @@
 					Total early-vote margin by day
 					<Info align="left">
 						IPEV + mail, cumulative. Above zero favors Democrats. Projected days spread the
-						remaining mail evenly. Election Day isn't on this line.
+						remaining mail evenly. Election Day isn't on this line. Reported includes today's counts
+						so far; late uploads can revise them.
 					</Info>
 				</h2>
 				<LegendToggle
@@ -789,13 +805,22 @@
 						...(forecast.linked ? [] : [{ name: 'Benchmark', swatch: 'tick' as const }])
 					]}
 				/>
-				<EChart
-					option={dailyOption}
-					height={340}
-					label="Daily in-person early vote margins, reported and projected, with benchmarks"
-				/>
+				<div class="daily-chart overflow-x-auto">
+					<EChart
+						option={dailyOption}
+						height={340}
+						mobileMinWidth={Math.max(640, dailyRows.length * 52 + 72)}
+						label="Daily in-person early vote margins, reported and projected, with benchmarks"
+					/>
+				</div>
 
-				<div class="mt-4 overflow-x-auto">
+				<p class="text-muted mt-1 text-xs md:hidden">
+					Swipe the chart or table to see all days and columns.
+				</p>
+				<div
+					class="daily-table mt-4 overflow-x-auto"
+					style:--table-width={forecast.linked ? '640px' : '920px'}
+				>
 					<table class="num w-full text-sm">
 						<thead>
 							<tr class="text-muted text-left text-xs">
@@ -830,29 +855,43 @@
 								<tr
 									class="border-t"
 									style:border-color="var(--border)"
-									style:background="var(--wash)"
+									style:background={today.pollsClosed ? undefined : 'var(--wash)'}
 								>
 									<td class="py-1.5 whitespace-nowrap">
 										{fmtDay(today.date, true)}
 										<span class="text-muted block text-xs">
 											{today.soFar
-												? `${today.pollsClosed ? 'polls closed' : 'in progress'} · ${fmtInt(today.soFar.total)} so far (${fmtMargin(marginOf(today.soFar))})`
+												? today.pollsClosed
+													? 'Reported · late uploads possible'
+													: 'Reported so far · in progress'
 												: 'in progress · none reported yet'}
 										</span>
 									</td>
-									<td class="text-right">{fmtInt(today.projectedVolume)}</td>
-									<td class="text-right {marginClass(today.projectedMargin)}">
-										{fmtMargin(today.projectedMargin)}
+									<td class="text-right">
+										{fmtInt(today.soFar?.total ?? 0)}
+										{#if !today.pollsClosed}<span class="text-muted block text-xs"
+												>Est. {fmtInt(today.projectedVolume)}</span
+											>{/if}
+									</td>
+									<td class="text-right {marginClass(today.soFar ? marginOf(today.soFar) : 0)}">
+										{today.soFar?.total ? fmtMargin(marginOf(today.soFar)) : '-'}
+										{#if todayBenchmark}<span class="text-muted block text-xs"
+												>Pre-day {fmtMargin(todayBenchmark.margin, 2)}</span
+											>{/if}
 									</td>
 									<td class="text-right">
-										{fmtLead((today.projectedVolume * today.projectedMargin) / 100)}
+										{today.soFar ? fmtLead(today.soFar.dem - today.soFar.rep) : '-'}
 									</td>
 									{#if !forecast.linked}
-										<td class="text-muted text-right">locked</td>
+										<td class="text-muted text-right"
+											>{todayBenchmark ? fmtMargin(todayBenchmark.margin, 2) : '-'}<span
+												class="block text-xs">pre-day reference</span
+											></td
+										>
 										<td class="text-muted text-right">-</td>
 									{/if}
-									<td class="text-right {marginClass(scenarioPath[0].margin)}">
-										{fmtMargin(scenarioPath[0].margin, 2)}
+									<td class="text-right {marginClass(live.margin)}">
+										{fmtMargin(live.margin, 2)}
 									</td>
 								</tr>
 							{/if}
@@ -889,9 +928,17 @@
 							{/each}
 						</tbody>
 					</table>
-					<p class="text-muted mt-2 text-xs">Shaded rows are projected.</p>
 				</div>
+				<p class="text-muted mt-3 pb-1 text-xs">
+					Shaded rows include projections. Pre-day is today's comparison reference.
+				</p>
 			</section>
+
+			{#if today}
+				<div class="md:hidden">
+					<TodayStats {today} benchmark={todayBenchmark} />
+				</div>
+			{/if}
 
 			<section class="card p-4">
 				<h2 class="mb-3 text-base font-semibold">By county</h2>
@@ -928,7 +975,7 @@
 		justify-content: flex-end;
 		margin-bottom: 0.25rem;
 	}
-	@media (max-width: 639px) {
+	@media (max-width: 767px) {
 		.header-tools {
 			justify-content: flex-start;
 		}

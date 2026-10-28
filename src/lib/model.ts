@@ -213,6 +213,25 @@ export function defaultDays(ctx: Ctx): ForecastDay[] {
 	return projectDays(ctx.complete, ctx.futureDates);
 }
 
+export function currentDayBenchmark(ctx: Ctx, forecast: Forecast): ForecastDay | null {
+	if (!ctx.current) return null;
+	const counted = ctx.current.soFar;
+	const early = { ...ctx.feed.early };
+	if (counted) {
+		for (const key of ['rep', 'dem', 'npa', 'oth', 'total'] as const) early[key] -= counted[key];
+	}
+	const beforeToday: Ctx = {
+		...ctx,
+		feed: { ...ctx.feed, early },
+		current: null,
+		futureDates: [ctx.current.date, ...ctx.futureDates]
+	};
+	return (
+		computeOutcome(beforeToday, { ...forecast, days: defaultDays(beforeToday) }).benchmarks[0] ??
+		null
+	);
+}
+
 export function defaultMailMargin(feed: FeedData): number {
 	return Math.round(weighted(feed.mailDays.slice(-5)) * 10) / 10;
 }

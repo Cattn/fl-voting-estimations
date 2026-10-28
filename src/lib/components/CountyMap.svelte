@@ -58,6 +58,8 @@
 			const t = {
 				rep: c.mail.rep + c.early.rep,
 				dem: c.mail.dem + c.early.dem,
+				npa: c.mail.npa + c.early.npa,
+				oth: c.mail.oth + c.early.oth,
 				total: c.mail.total + c.early.total
 			};
 			return {
@@ -105,7 +107,34 @@
 	);
 
 	const sorted = $derived([...rows].sort((a, b) => b.votes - a.votes));
+	const parties = [
+		{ key: 'rep', label: 'R voters', color: 'text-rep' },
+		{ key: 'dem', label: 'D voters', color: 'text-dem' }
+	] as const;
+	const totals = $derived.by(() => {
+		const registered = rows.reduce((sum, r) => sum + r.registered, 0);
+		const votes = rows.reduce((sum, r) => sum + r.votes, 0);
+		const counts = (key: 'ipev' | 'mail' | 'total') =>
+			rows.reduce(
+				(sum, r) => ({
+					rep: sum.rep + (r[key]?.rep ?? 0),
+					dem: sum.dem + (r[key]?.dem ?? 0),
+					npa: sum.npa + (r[key]?.npa ?? 0),
+					oth: sum.oth + (r[key]?.oth ?? 0),
+					total: sum.total + (r[key]?.total ?? 0)
+				}),
+				{ rep: 0, dem: 0, npa: 0, oth: 0, total: 0 }
+			);
+		return {
+			votes,
+			turnout: registered ? (votes / registered) * 100 : 0,
+			ipev: counts('ipev'),
+			mail: counts('mail'),
+			total: counts('total')
+		};
+	});
 	const option = $derived(mapOption(theme.palette, mapRows, metric));
+	const partyTotals = $derived(selected ? totals.ipev : totals.total);
 	const marginClass = (v: number) => (v < 0 ? 'text-rep' : 'text-dem');
 
 	onMount(async () => {
@@ -169,8 +198,15 @@
 	<div style:height="460px" class="text-muted grid place-items-center text-sm">Loading map…</div>
 {/if}
 
-<div class="mt-4 overflow-x-auto">
-	<table class="num w-full text-sm">
+<div class="text-muted mt-4 flex items-center text-xs">
+	Votes by party
+	<Info align="left"
+		>Each party shows votes cast and its share of all votes in the selected period. These are not
+		party turnout rates; the source does not provide county registration totals by party.</Info
+	>
+</div>
+<div class="mt-2 overflow-x-auto">
+	<table class="num w-full text-sm" style:min-width="760px">
 		<thead>
 			<tr class="text-muted text-left text-xs">
 				<th class="pb-2 font-medium">County</th>
@@ -178,6 +214,11 @@
 				<th class="pb-2 pl-3 text-right font-medium">
 					{selected ? '% of registered' : 'Turnout'}
 				</th>
+				{#each parties as party (party.key)}
+					<th class="pb-2 pl-3 text-right font-medium whitespace-nowrap {party.color}"
+						>{party.label}</th
+					>
+				{/each}
 				{#if !selected}
 					<th class="pb-2 pl-3 text-right font-medium">Total</th>
 				{/if}
@@ -189,10 +230,19 @@
 		</thead>
 		<tbody>
 			{#each showAll ? sorted : sorted.slice(0, 15) as r (r.code)}
+				{@const partyCounts = r.total ?? r.ipev}
 				<tr class="border-t" style:border-color="var(--border)">
 					<td class="py-1.5">{r.name}</td>
 					<td class="pl-3 text-right">{fmtInt(r.votes)}</td>
 					<td class="pl-3 text-right">{r.turnout.toFixed(selected ? 2 : 1)}%</td>
+					{#each parties as party (party.key)}
+						<td class="py-1.5 pl-3 text-right whitespace-nowrap {party.color}">
+							{fmtInt(partyCounts[party.key])}
+							<span class="text-muted block text-xs"
+								>{r.votes ? `${((partyCounts[party.key] / r.votes) * 100).toFixed(1)}%` : '-'}</span
+							>
+						</td>
+					{/each}
 					{#if r.total}
 						<td class="pl-3 text-right {marginClass(marginOf(r.total))}">
 							{fmtMargin(marginOf(r.total))}
@@ -209,8 +259,42 @@
 				</tr>
 			{/each}
 		</tbody>
+		<tfoot>
+			<tr class="border-t-2 font-semibold" style:border-color="var(--axis)">
+				<td class="py-2"
+					>Total<span class="text-muted block text-xs font-normal whitespace-nowrap"
+						>All {rows.length} counties</span
+					></td
+				>
+				<td class="py-2 pl-3 text-right">{fmtInt(totals.votes)}</td>
+				<td class="py-2 pl-3 text-right">{totals.turnout.toFixed(selected ? 2 : 1)}%</td>
+				{#each parties as party (party.key)}
+					<td class="py-2 pl-3 text-right whitespace-nowrap {party.color}">
+						{fmtInt(partyTotals[party.key])}
+						<span class="text-muted block text-xs font-normal"
+							>{totals.votes
+								? `${((partyTotals[party.key] / totals.votes) * 100).toFixed(1)}%`
+								: '-'}</span
+						>
+					</td>
+				{/each}
+				{#if !selected}
+					<td class="py-2 pl-3 text-right {marginClass(marginOf(totals.total))}"
+						>{totals.total.total ? fmtMargin(marginOf(totals.total)) : '-'}</td
+					>
+				{/if}
+				<td class="py-2 pl-3 text-right {marginClass(marginOf(totals.ipev))}"
+					>{totals.ipev.total ? fmtMargin(marginOf(totals.ipev)) : '-'}</td
+				>
+				{#if !selected}
+					<td class="py-2 pl-3 text-right {marginClass(marginOf(totals.mail))}"
+						>{totals.mail.total ? fmtMargin(marginOf(totals.mail)) : '-'}</td
+					>
+				{/if}
+			</tr>
+		</tfoot>
 	</table>
-	<button class="btn mt-2" onclick={() => (showAll = !showAll)}>
+	<button class="btn mt-2 mb-3" onclick={() => (showAll = !showAll)}>
 		{showAll ? 'Show top 15' : `Show all ${sorted.length} counties`}
 	</button>
 </div>

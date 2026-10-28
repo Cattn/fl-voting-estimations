@@ -119,4 +119,33 @@
 		right: -6px;
 		transform: none;
 	}
+
+	@media (max-width: 767px) {
+		.info {
+			flex-shrink: 0;
+		}
+
+		button {
+			width: 24px;
+			height: 24px;
+			font-size: 12px;
+		}
+
+		.bubble,
+		.bubble.left,
+		.bubble.right {
+			position: fixed;
+			top: auto;
+			bottom: max(16px, env(safe-area-inset-bottom));
+			left: 16px;
+			right: 16px;
+			width: auto;
+			max-width: none;
+			max-height: 50dvh;
+			overflow-y: auto;
+			transform: none;
+			padding: 0.875rem;
+			font-size: 14px;
+		}
+	}
 </style>

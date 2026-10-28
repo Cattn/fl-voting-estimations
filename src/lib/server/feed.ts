@@ -115,10 +115,30 @@ async function refresh(): Promise<FeedData> {
 }
 
 export async function refreshSnapshot(): Promise<void> {
-	const data = await fetchWithRetry();
-	const snapshot = { at: Date.now(), data };
-	await saveSnapshot(snapshot);
-	cache = snapshot;
+	const started = Date.now();
+	try {
+		const data = await fetchWithRetry();
+		const snapshot = { at: Date.now(), data };
+		await saveSnapshot(snapshot);
+		cache = snapshot;
+		console.log({
+			event: 'feed_refresh',
+			outcome: 'success',
+			duration_ms: Date.now() - started,
+			source_updated_at: data.fetchedAt,
+			ipev_votes: data.early.total,
+			mail_votes: data.mail.total,
+			kv_writes: 1
+		});
+	} catch (error) {
+		console.error({
+			event: 'feed_refresh',
+			outcome: 'error',
+			duration_ms: Date.now() - started,
+			error: error instanceof Error ? error.message : String(error)
+		});
+		throw error;
+	}
 }
 
 function startRefresh(): Promise<FeedData> {

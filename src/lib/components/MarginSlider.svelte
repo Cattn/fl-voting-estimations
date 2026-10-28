@@ -92,4 +92,23 @@
 		outline: 2px solid var(--dem);
 		outline-offset: 4px;
 	}
+
+	@media (max-width: 767px) {
+		input[type='range'] {
+			height: 32px;
+			background-size: 100% 6px;
+			background-repeat: no-repeat;
+			background-position: center;
+		}
+
+		input[type='range']::-webkit-slider-thumb {
+			width: 24px;
+			height: 24px;
+		}
+
+		input[type='range']::-moz-range-thumb {
+			width: 20px;
+			height: 20px;
+		}
+	}
 </style>

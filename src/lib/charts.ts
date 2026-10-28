@@ -35,24 +35,33 @@ export function marginChartOption(
 	history: HistoryPoint[],
 	scenario: ProjectedPoint[],
 	benchmark: ProjectedPoint[],
-	final: { scenario: number; target: number; showBenchmark: boolean },
+	final: { scenario: number; target: number; showBenchmark: boolean; inProgressDate?: string },
 	selected: Record<string, boolean> = {}
 ): EChartsOption {
-	const dates = [...history.map((h) => h.date), ...scenario.map((s) => s.date)];
+	const dates = [
+		...new Set([...history.map((h) => h.date), ...scenario.map((s) => s.date)])
+	].sort();
 	const last = history.length - 1;
-	const pad = (n: number) => Array<null>(n).fill(null);
 
 	type Pt = { value: number; total: number; gap: number; kind: string };
-	const hist: (Pt | null)[] = [
-		...history.map((h) => ({ value: h.margin, total: h.total, gap: h.gap, kind: 'Reported' })),
-		...pad(scenario.length)
-	];
+	const hist: (Pt | null)[] = dates.map((date) => {
+		const h = history.find((h) => h.date === date);
+		return h
+			? {
+					value: h.margin,
+					total: h.total,
+					gap: h.gap,
+					kind: date === final.inProgressDate ? 'Reported so far' : 'Reported'
+				}
+			: null;
+	});
 	const anchor = history[last];
-	const proj = (path: ProjectedPoint[], kind: string): (Pt | null)[] => [
-		...pad(last),
-		{ value: anchor.margin, total: anchor.total, gap: anchor.gap, kind: 'Reported' },
-		...path.map((s) => ({ value: s.margin, total: s.total, gap: s.gap, kind }))
-	];
+	const proj = (path: ProjectedPoint[], kind: string): (Pt | null)[] =>
+		dates.map((date) => {
+			const point = path.find((s) => s.date === date);
+			if (point) return { value: point.margin, total: point.total, gap: point.gap, kind };
+			return anchor?.date === date ? hist[dates.indexOf(date)] : null;
+		});
 
 	const all = [
 		...history.map((h) => h.margin),
@@ -126,7 +135,7 @@ export function marginChartOption(
 					})
 					.map((r) => {
 						const d = r.data!;
-						const label = d.kind === 'Reported' ? 'Reported' : r.seriesName;
+						const label = d.kind.startsWith('Reported') ? d.kind : r.seriesName;
 						return `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, d.value)}">${fmtMargin(d.value, 2)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(d.gap)} lead · ${fmtInt(d.total)} voters</div>`;
 					});
 				const sc = rows.find((r) => r.data!.kind === 'Your scenario')?.data;
@@ -210,6 +219,7 @@ export function marginChartOption(
 
 export interface DailyRow {
 	date: string;
+	reference?: number;
 	reported?: { margin: number; volume: number; gap: number };
 	scenario?: { margin: number; volume: number; gap: number };
 	benchmark?: { margin: number; volume: number; gap: number };
@@ -270,7 +280,7 @@ export function dailyChartOption(
 					x
 						? `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, x.margin)}">${fmtMargin(x.margin)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(x.gap)} lead · ${fmtInt(x.volume)} votes</div>`
 						: '';
-				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line('Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}</div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Pre-day benchmark: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
 			}
 		},
 		xAxis: {
