@@ -540,7 +540,8 @@
 						Upcoming IPEV days
 						<Info align="left">
 							Defaults: votes from the same weekday last week times recent growth; margins from the
-							last 3 weekdays, adjusted for weekends.
+							last 3 weekdays, adjusted for weekends. The final Sunday uses only the counties that
+							open that day.
 						</Info>
 					</div>
 					<div class="daily-inputs overflow-x-auto">

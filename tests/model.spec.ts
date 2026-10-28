@@ -16,7 +16,8 @@ import {
 	reconcileDays,
 	setIpevHoldingTarget,
 	swingToTarget,
-	upgradeForecast
+	upgradeForecast,
+	MODEL_VERSION
 } from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -30,6 +31,33 @@ earlyDays:$R[11]=[${day('2026-10-26', 600, 300, 100)},${day('2026-10-27', 500, 4
 mailDays:$R[12]=[${day('2026-10-26', 150, 250, 100)},${day('2026-10-27', 150, 250, 100)}]}}]})($R["tsr"])</script>`;
 
 const open = (today: string) => ({ today, pollsClosed: false });
+
+const county = (code: string, rep: number, dem: number) => ({
+	code,
+	rep,
+	dem,
+	npa: 0,
+	oth: 0,
+	total: rep + dem
+});
+
+const countyFeed = () => {
+	const earlyDays = ['19', '20', '21', '22', '23', '24', '25', '26', '27'].map((dd) => {
+		const counties =
+			dd === '25'
+				? [county('DAD', 350, 650), county('LEE', 700, 300)]
+				: [county('DAD', 400, 600), county('LEE', 700, 300)];
+		return {
+			date: `2026-10-${dd}`,
+			...counties.reduce(
+				(a, c) => ({ ...a, rep: a.rep + c.rep, dem: a.dem + c.dem, total: a.total + c.total }),
+				{ rep: 0, dem: 0, npa: 0, oth: 0, total: 0 }
+			),
+			counties
+		};
+	});
+	return { ...extractFeed(html), earlyDays };
+};
 
 describe('current-day benchmark', () => {
 	it('drops completed dates and re-solves remaining benchmarks after rollover', () => {
@@ -203,6 +231,14 @@ describe('day status', () => {
 		expect(wed.volume).toBe(300000);
 	});
 
+	it('projects the final Sunday from the counties open that day', () => {
+		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
+		const days = defaultDays(ctx);
+		expect(days.find((d) => d.date === '2026-11-01')?.margin).toBe(30);
+		expect(days.find((d) => d.date === '2026-10-30')?.margin).toBe(-10);
+		expect(days.find((d) => d.date === '2026-10-31')?.margin).toBe(-10);
+	});
+
 	it('has nothing left to edit once early voting is over', () => {
 		const ctx = buildCtx(feed, open('2026-11-05'));
 		expect(ctx.current).toBeNull();
@@ -258,7 +294,10 @@ describe('locked sliders', () => {
 	it('preserves unlocked scenarios and turnout assumptions during migration', () => {
 		const defaults = defaultForecast(ctx);
 		const unlocked = { ...defaults, modelVersion: undefined, linked: false };
-		expect(upgradeForecast(ctx, unlocked)).toBe(unlocked);
+		const kept = upgradeForecast(ctx, unlocked);
+		expect(kept.linked).toBe(false);
+		expect(kept.edMargin).toBe(unlocked.edMargin);
+		kept.days.forEach((d, i) => expect(d.margin).toBeCloseTo(unlocked.days[i].margin, 6));
 		const old = {
 			...defaults,
 			modelVersion: undefined,
@@ -271,6 +310,47 @@ describe('locked sliders', () => {
 		expect(upgraded.mailFinal).toBe(old.mailFinal);
 		expect(upgraded.days.map((d) => d.volume)).toEqual(old.days.map((d) => d.volume));
 		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(old.target, 6);
+	});
+
+	it('moves untouched forecasts onto the final-Sunday shape without changing the outcome', () => {
+		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
+		const legacyShape: Record<string, number> = {
+			'2026-10-29': -10,
+			'2026-10-30': -10,
+			'2026-10-31': -10,
+			'2026-11-01': -5
+		};
+		const defaults = defaultForecast(ctx);
+		for (const linked of [true, false]) {
+			const old = {
+				...defaults,
+				modelVersion: 2,
+				linked,
+				days: defaults.days.map((d) => ({ ...d, margin: legacyShape[d.date] - 7.3 }))
+			};
+			const upgraded = upgradeForecast(ctx, old);
+			const margin = (date: string) => upgraded.days.find((d) => d.date === date)!.margin;
+			expect(upgraded.modelVersion).toBe(MODEL_VERSION);
+			expect(margin('2026-11-01') - margin('2026-10-29')).toBeCloseTo(40, 6);
+			expect(margin('2026-10-29')).toBeLessThan(-17.3);
+			expect(upgraded.edMargin).toBe(old.edMargin);
+			expect(upgraded.days.map((d) => d.volume)).toEqual(old.days.map((d) => d.volume));
+			expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(computeOutcome(ctx, old).margin, 6);
+			expect(upgradeForecast(ctx, upgraded)).toBe(upgraded);
+		}
+	});
+
+	it('leaves forecasts with hand-edited days alone', () => {
+		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
+		const defaults = defaultForecast(ctx);
+		const edited = {
+			...defaults,
+			modelVersion: 2,
+			days: defaults.days.map((d) => ({ ...d, margin: d.date === '2026-10-30' ? -2 : -15 }))
+		};
+		const upgraded = upgradeForecast(ctx, edited);
+		expect(upgraded.modelVersion).toBe(MODEL_VERSION);
+		expect(upgraded.days).toEqual(edited.days);
 	});
 
 	it('reaches the R+8.5 default by swinging all remaining margins from the R+5 baseline', () => {
@@ -303,7 +383,7 @@ describe('locked sliders', () => {
 			days: defaults.days.map((d) => ({ ...d, margin: -29.3 }))
 		};
 		const repaired = upgradeForecast(ctx, broken);
-		expect(repaired.modelVersion).toBe(2);
+		expect(repaired.modelVersion).toBe(MODEL_VERSION);
 		expect(repaired.edMargin).toBeCloseTo(defaults.edMargin, 8);
 		expect(repaired.mailMargin).toBeCloseTo(defaults.mailMargin, 8);
 		repaired.days.forEach((d, i) => expect(d.margin).toBeCloseTo(defaults.days[i].margin, 8));

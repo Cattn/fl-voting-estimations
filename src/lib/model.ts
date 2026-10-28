@@ -139,9 +139,52 @@ export interface Ctx {
 
 const weighted = (rows: DayCounts[]) => marginOf(sum(rows));
 
-function projectDays(days: DayCounts[], dates: string[]): ForecastDay[] {
+export const FINAL_DAY_COUNTIES = new Set([
+	'DAD',
+	'BRO',
+	'PAL',
+	'ORA',
+	'HIL',
+	'DUV',
+	'PIN',
+	'POL',
+	'SEM',
+	'OSC',
+	'SAR',
+	'MAN',
+	'LEO',
+	'STL',
+	'ALA',
+	'CHA',
+	'GAD',
+	'LEV',
+	'BRA',
+	'TAY'
+]);
+
+function finalDayCounties(days: DayCounts[]): DayCounts[] | null {
+	if (!days.every((d) => d.counties?.length)) return null;
+	return days.map((d) => ({
+		date: d.date,
+		...sum((d.counties ?? []).filter((c) => FINAL_DAY_COUNTIES.has(c.code)))
+	}));
+}
+
+function dayMargin(days: DayCounts[], date: string): number {
+	const weekdays = days.filter((d) => !isWeekend(d.date));
+	const baseline = weighted(weekdays.slice(-3).length ? weekdays.slice(-3) : days.slice(-3));
+	const prev = days.find((d) => d.date === addDays(date, -7));
+	if (!isWeekend(date) || !prev) return baseline;
+	const priorWeekdays = days.filter(
+		(d) => !isWeekend(d.date) && d.date < prev.date && d.date >= addDays(prev.date, -6)
+	);
+	return priorWeekdays.length ? baseline + (marginOf(prev) - weighted(priorWeekdays)) : baseline;
+}
+
+function projectDays(days: DayCounts[], dates: string[], finalDayOnly = true): ForecastDay[] {
 	if (!days.length) return dates.map((date) => ({ date, volume: 0, margin: 0 }));
 	const find = (date: string) => days.find((d) => d.date === date);
+	const finalDays = finalDayOnly ? finalDayCounties(days) : null;
 
 	const pairs = days
 		.slice(-3)
@@ -152,19 +195,10 @@ function projectDays(days: DayCounts[], dates: string[]): ForecastDay[] {
 		: 1;
 	const avgRecentVolume = sum(days.slice(-3)).total / Math.min(3, days.length);
 
-	const weekdays = days.filter((d) => !isWeekend(d.date));
-	const baseline = weighted(weekdays.slice(-3).length ? weekdays.slice(-3) : days.slice(-3));
-
 	return dates.map((date) => {
 		const prev = find(addDays(date, -7));
 		const volume = Math.round((prev ? prev.total * growth : avgRecentVolume) / 1000) * 1000;
-		let margin = baseline;
-		if (isWeekend(date) && prev) {
-			const priorWeekdays = days.filter(
-				(d) => !isWeekend(d.date) && d.date < prev.date && d.date >= addDays(prev.date, -6)
-			);
-			if (priorWeekdays.length) margin = baseline + (marginOf(prev) - weighted(priorWeekdays));
-		}
+		const margin = dayMargin(date === EV_END && finalDays ? finalDays : days, date);
 		return { date, volume, margin: Math.round(margin * 10) / 10 };
 	});
 }
@@ -232,9 +266,11 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 export const BASELINE = { target: -5, edMargin: -10 };
 export const DEFAULT_TARGET = -8.5;
 
+export const MODEL_VERSION = 3;
+
 export function defaultForecast(ctx: Ctx): Forecast {
 	const baseline = holdTarget(ctx, {
-		modelVersion: 2,
+		modelVersion: MODEL_VERSION,
 		name: 'Default scenario',
 		target: BASELINE.target,
 		edMargin: BASELINE.edMargin,
@@ -251,8 +287,33 @@ export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 	return defaultDays(ctx).map((d) => days.find((x) => x.date === d.date) ?? d);
 }
 
+const ipevGap = (days: ForecastDay[]) => days.reduce((a, d) => a + (d.volume * d.margin) / 100, 0);
+
+function hasLegacyShape(ctx: Ctx, days: ForecastDay[]): boolean {
+	const offsets = projectDays(ctx.complete, ctx.futureDates, false).map((d) => {
+		const saved = days.find((x) => x.date === d.date);
+		return saved ? saved.margin - d.margin : NaN;
+	});
+	if (!offsets.length || offsets.some(Number.isNaN)) return false;
+	return Math.max(...offsets) - Math.min(...offsets) <= 0.15;
+}
+
+function reshapeDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
+	const saved = reconcileDays(ctx, days);
+	const next = defaultDays(ctx).map((d, i) => ({ ...d, volume: saved[i].volume }));
+	const volume = next.reduce((a, d) => a + d.volume, 0);
+	const delta = volume ? ((ipevGap(saved) - ipevGap(next)) / volume) * 100 : 0;
+	return next.map((d) => ({ ...d, margin: d.margin + delta }));
+}
+
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
-	if (!f.linked || f.modelVersion === 2) return f;
+	if (f.modelVersion === MODEL_VERSION) return f;
+	if (f.linked && f.modelVersion !== 2) return rebaseForecast(ctx, f);
+	if (!hasLegacyShape(ctx, f.days)) return { ...f, modelVersion: MODEL_VERSION };
+	return { ...f, modelVersion: MODEL_VERSION, days: reshapeDays(ctx, f.days) };
+}
+
+function rebaseForecast(ctx: Ctx, f: Forecast): Forecast {
 	const defaults = defaultForecast(ctx);
 	const baseline = holdTarget(ctx, {
 		...defaults,
