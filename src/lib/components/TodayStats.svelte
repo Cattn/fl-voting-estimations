@@ -6,7 +6,6 @@
 	let { today, benchmark }: { today: CurrentDay; benchmark: ForecastDay | null } = $props();
 	const counted = $derived(today.soFar);
 	const margin = $derived(counted?.total ? marginOf(counted) : null);
-	const displayedMargin = $derived(margin ?? benchmark?.margin ?? null);
 	const delta = $derived(margin !== null && benchmark ? margin - benchmark.margin : null);
 	const color = (v: number) => (v < 0 ? 'text-rep' : v > 0 ? 'text-dem' : '');
 </script>
@@ -25,11 +24,11 @@
 	<div class="stats-grid grid grid-cols-2 gap-3 lg:grid-cols-5">
 		<div class="card p-4">
 			<div class="text-muted text-xs font-medium uppercase">Today's margin</div>
-			<div class="num mt-1 text-2xl font-semibold {color(displayedMargin ?? 0)}">
-				{displayedMargin === null ? '-' : fmtMargin(displayedMargin, 2)}
+			<div class="num mt-1 text-2xl font-semibold {color(margin ?? 0)}">
+				{margin === null ? '-' : fmtMargin(margin, 2)}
 			</div>
 			<div class="text-2 mt-1 text-xs">
-				{counted?.total ? 'Of all votes today' : 'Projected · awaiting votes'}
+				{counted?.total ? 'Of all votes today' : 'Awaiting votes'}
 			</div>
 		</div>
 		<div class="card p-4">
