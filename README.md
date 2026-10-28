@@ -1,9 +1,9 @@
 <p align="center">
-    <img src="src/lib/assets/favicon.svg" width="128" alt="Florida Early Vote Forecaster Icon"/>
+    <img src="src/lib/assets/favicon.svg" width="128" alt="Florida Vote Forecaster Icon"/>
 </p>
 
 <h3 align="center">
-    <strong>Florida Early Vote Forecaster</strong>
+    <strong>Florida Vote Forecaster</strong>
 </h3>
 
 <p align="center">
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-    Tracks Florida 2026 early voting (IPEV + returned mail) by party and lets you build forecasts of the final electorate, with daily benchmarks for the remaining early-voting days.
+    Tracks Florida 2026 voting (IPEV + returned mail) by party and lets you build forecasts of the final electorate, with daily benchmarks for the remaining early-voting days.
 </p>
 
 Data comes from [acorn-maple-earth-lake.grok.me](https://acorn-maple-earth-lake.grok.me/). The server reads the dataset embedded in that page, caches it for 3 minutes, and keeps the last good snapshot in Cloudflare KV so a slow or empty source never blocks the page.
