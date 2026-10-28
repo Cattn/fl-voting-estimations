@@ -43,6 +43,7 @@
 	},
 	"dependencies": {
 		"echarts": "^6.1.0",
+		"seroval": "^1.7.3",
 		"topojson-client": "^3.1.0",
 		"us-atlas": "^3.0.1"
 	}

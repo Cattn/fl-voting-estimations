@@ -27,6 +27,8 @@ export interface DayCounts extends PartyCounts {
 export interface FeedData {
 	source: string;
 	stale?: string;
+	partial?: boolean;
+	received?: number;
 	fetchedAt: string;
 	windowOpen: boolean;
 	registered: number;
