@@ -4,6 +4,7 @@ import {
 	buildCtx,
 	buildHistory,
 	computeOutcome,
+	currentDayBenchmark,
 	defaultForecast,
 	floridaClock,
 	fmtMargin,
@@ -25,6 +26,45 @@ earlyDays:$R[11]=[${day('2026-10-26', 600, 300, 100)},${day('2026-10-27', 500, 4
 mailDays:$R[12]=[${day('2026-10-26', 150, 250, 100)},${day('2026-10-27', 150, 250, 100)}]}}]})($R["tsr"])</script>`;
 
 const open = (today: string) => ({ today, pollsClosed: false });
+
+describe('current-day benchmark', () => {
+	it('drops completed dates and re-solves remaining benchmarks after rollover', () => {
+		const feed = extractFeed(html);
+		const before = buildCtx(feed, open('2026-10-27'));
+		const forecast = defaultForecast(before);
+		const after = buildCtx(feed, open('2026-10-28'));
+		const reconciled = { ...forecast, days: reconcileDays(after, forecast.days) };
+		const outcome = computeOutcome(after, reconciled);
+		expect(outcome.benchmarks.every((d) => d.date > '2026-10-28')).toBe(true);
+		expect(outcome.benchmarks.some((d) => d.date === '2026-10-27')).toBe(false);
+		expect(computeOutcome(after, { ...reconciled, days: outcome.benchmarks }).margin).toBeCloseTo(
+			forecast.target,
+			6
+		);
+		expect(currentDayBenchmark(after, reconciled)?.date).toBe('2026-10-28');
+	});
+	it('ignores today counts and upcoming-day edits when reconstructing the target', () => {
+		const feed = extractFeed(html);
+		const ctx = buildCtx(feed, open('2026-10-27'));
+		const forecast = defaultForecast(ctx);
+		const initial = currentDayBenchmark(ctx, forecast);
+		const changed = structuredClone(feed);
+		changed.early.dem += 100;
+		changed.early.rep -= 100;
+		changed.earlyDays[1].dem += 100;
+		changed.earlyDays[1].rep -= 100;
+		const alteredForecast = { ...forecast, days: forecast.days.map((d) => ({ ...d, margin: 30 })) };
+		expect(currentDayBenchmark(buildCtx(changed, open('2026-10-27')), alteredForecast)).toEqual(
+			initial
+		);
+		expect(initial?.date).toBe('2026-10-27');
+	});
+
+	it('has no current-day benchmark after early voting ends', () => {
+		const ctx = buildCtx(extractFeed(html), open('2026-11-02'));
+		expect(currentDayBenchmark(ctx, defaultForecast(ctx))).toBeNull();
+	});
+});
 
 describe('feed extraction', () => {
 	it('parses the serialized payload without executing it', () => {

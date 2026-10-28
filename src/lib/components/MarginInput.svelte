@@ -66,4 +66,11 @@
 		opacity: 1;
 		background: var(--wash);
 	}
+
+	@media (max-width: 767px) {
+		.toggle button {
+			min-width: 40px;
+			min-height: 40px;
+		}
+	}
 </style>

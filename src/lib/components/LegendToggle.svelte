@@ -109,4 +109,10 @@
 		outline: 2px solid var(--dem);
 		outline-offset: 2px;
 	}
+
+	@media (max-width: 767px) {
+		.chip {
+			min-height: 40px;
+		}
+	}
 </style>

@@ -141,3 +141,97 @@ input:focus-visible + .switch {
 	outline: 2px solid var(--dem);
 	outline-offset: 2px;
 }
+
+@media (max-width: 767px) {
+	.daily-chart {
+		padding-bottom: 0.75rem;
+	}
+
+	.daily-table.overflow-x-auto table {
+		min-width: var(--table-width);
+	}
+
+	.daily-table th,
+	.daily-table td {
+		padding-right: 1rem;
+		white-space: nowrap;
+	}
+
+	.daily-table td:first-child span {
+		max-width: 12rem;
+		white-space: normal;
+	}
+
+	main {
+		padding: 1rem 0.75rem;
+	}
+
+	.card {
+		min-width: 0;
+		padding: 0.875rem;
+	}
+
+	main > div,
+	main > div > * {
+		min-width: 0;
+	}
+
+	.page-header,
+	.header-tools {
+		width: 100%;
+	}
+
+	.header-tools,
+	.header-status {
+		justify-content: flex-start;
+	}
+
+	.forecast-controls {
+		flex-wrap: wrap;
+	}
+
+	.btn,
+	.field {
+		min-height: 40px;
+	}
+
+	.field {
+		font-size: 16px;
+	}
+
+	.overflow-x-auto {
+		max-width: 100%;
+		overscroll-behavior-x: contain;
+	}
+
+	.overflow-x-auto table {
+		min-width: 360px;
+	}
+
+	.daily-inputs table {
+		min-width: 320px;
+	}
+
+	[aria-label='Headline numbers'] {
+		gap: 0.5rem;
+	}
+
+	[aria-label='Headline numbers'] .text-2 {
+		font-size: 0.75rem;
+		line-height: 1.6;
+	}
+
+	[aria-label='Forecast inputs'] details > .grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	[aria-label='Forecast inputs'] details > .grid > span:empty {
+		display: none;
+	}
+
+	[aria-label='Map measure'] {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+}
