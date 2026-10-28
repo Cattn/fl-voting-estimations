@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marginChartOption } from '../src/lib/charts.ts';
+import { dailyChartOption, marginChartOption } from '../src/lib/charts.ts';
 import type { HistoryPoint } from '../src/lib/model.ts';
 
 describe('reported chart dates', () => {
@@ -39,6 +39,50 @@ describe('reported chart dates', () => {
 		const series = option.series as { data: { value: number; kind: string }[] }[];
 		expect(series[0].data[0]).toMatchObject({ value: -10, kind: 'Reported so far' });
 		expect(series[1].data[0]).toMatchObject({ value: -15, kind: 'Your scenario' });
+		const tooltip = (option.tooltip as { formatter: (params: unknown) => string }).formatter;
+		const params = [
+			{
+				seriesName: 'Reported',
+				axisValue: counts.date,
+				data: { ...series[0].data[0], value: -1 }
+			},
+			{
+				seriesName: 'Your scenario',
+				axisValue: counts.date,
+				data: { ...series[1].data[0], value: -1.67 }
+			}
+		];
+		expect(tooltip(params)).toContain('D+0.67 ahead currently');
+		params[0].data.value = -2.34;
+		expect(tooltip(params)).toContain('R+0.67 ahead currently');
+		params[0].data.value = -1.67;
+		expect(tooltip(params)).toContain('On forecast currently');
+		expect(tooltip(params.slice(0, 1))).not.toContain('Vs. forecast:');
+		expect(tooltip(params.slice(1))).not.toContain('Vs. forecast:');
+		const dailyRows = [
+			{
+				date: counts.date,
+				inProgress: true,
+				reference: -1.67,
+				reported: { margin: -1, volume: 100, gap: -1 },
+				scenario: { margin: -1.67, volume: 1000, gap: -16.7 }
+			}
+		];
+		const daily = () =>
+			(
+				dailyChartOption(palette, dailyRows).tooltip as { formatter: (params: unknown) => string }
+			).formatter([{ dataIndex: 0 }]);
+		expect(daily()).toContain('Projected full day');
+		expect(daily()).toContain('D+0.67 ahead currently');
+		expect(daily()).not.toContain('Expected:');
+		dailyRows[0].reported.margin = -2.34;
+		expect(daily()).toContain('R+0.67 ahead currently');
+		dailyRows[0].reported.margin = -1.67;
+		expect(daily()).toContain('On projection currently');
+		dailyRows[0].reported.volume = 0;
+		expect(daily()).not.toContain('Vs. projected:');
+		dailyRows[0].inProgress = false;
+		expect(daily()).not.toContain('Vs. projected:');
 		const nextDay = [{ ...path[0], date: '2026-10-28' }];
 		const rollover = marginChartOption(palette, history, nextDay, nextDay, {
 			scenario: -5,

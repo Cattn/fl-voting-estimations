@@ -141,9 +141,6 @@
 		})
 	);
 
-	const benchmarkCumulative = $derived(
-		outcome.benchmarks.reduce<number[]>((acc, b) => [...acc, (acc.at(-1) ?? 0) + b.gap], [])
-	);
 	const pathOffset = $derived(today ? 1 : 0);
 
 	onMount(() => {
@@ -937,9 +934,6 @@
 									</td>
 									<td class="text-right">
 										{fmtLead((forecast.days[i].volume * forecast.days[i].margin) / 100)}
-										{#if forecast.linked}
-											<span class="text-muted text-xs">(Σ {fmtLead(benchmarkCumulative[i])})</span>
-										{/if}
 									</td>
 									{#if !forecast.linked}
 										<td class="text-right font-semibold {marginClass(b.margin)}">
@@ -947,7 +941,6 @@
 										</td>
 										<td class="text-right">
 											{fmtLead(b.gap)}
-											<span class="text-muted text-xs">(Σ {fmtLead(benchmarkCumulative[i])})</span>
 										</td>
 									{/if}
 									<td class="text-right {marginClass(scenarioPath[i + pathOffset].margin)}">
