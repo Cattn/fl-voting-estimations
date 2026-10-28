@@ -15,13 +15,16 @@ import {
 	mailRemaining,
 	reconcileDays,
 	reconcileForecast,
+	setEdHoldingTarget,
 	setIpevHoldingTarget,
 	swingToTarget,
 	upgradeForecast,
 	BASELINE,
 	MAIL_SWING,
 	MODEL_VERSION,
-	ED_TURNOUT
+	ED_RANGE,
+	ED_TURNOUT,
+	IPEV_RANGE
 } from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -371,6 +374,23 @@ describe('locked sliders', () => {
 		const b = holdTarget(ctx, { ...f, edMargin: -20 });
 		expect(b.edMargin).toBe(-20);
 		expect(computeOutcome(ctx, b).margin).toBeCloseTo(f.target, 6);
+	});
+
+	it('keeps linked ED and IPEV moves inside their slider ranges', () => {
+		const f = holdTarget(ctx, { ...defaultForecast(ctx), edTurnout: 3000 });
+		const a = setIpevHoldingTarget(ctx, f, IPEV_RANGE.max);
+		const ipevA = computeOutcome(ctx, a).scenarioIpevMargin;
+		expect(a.edMargin).toBe(ED_RANGE.min);
+		expect(ipevA).toBeLessThan(IPEV_RANGE.max);
+		expect(ipevA).toBeGreaterThan(computeOutcome(ctx, f).scenarioIpevMargin);
+		expect(computeOutcome(ctx, a).margin).toBeCloseTo(f.target, 6);
+		const b = setEdHoldingTarget(ctx, f, ED_RANGE.max);
+		expect(b.edMargin).toBeLessThan(ED_RANGE.max);
+		expect(computeOutcome(ctx, b).scenarioIpevMargin).toBeCloseTo(IPEV_RANGE.min, 6);
+		expect(computeOutcome(ctx, b).margin).toBeCloseTo(f.target, 6);
+		const c = setEdHoldingTarget(ctx, f, -25);
+		expect(c.edMargin).toBe(-25);
+		expect(computeOutcome(ctx, c).margin).toBeCloseTo(f.target, 6);
 	});
 
 	const rawForecast = (c: ReturnType<typeof buildCtx>) =>
