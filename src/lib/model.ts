@@ -238,11 +238,12 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 	return Math.max(0, f.mailFinal - ctx.feed.mail.total);
 }
 
-export const BASELINE = { target: -8.5, edMargin: -10 };
+export const BASELINE = { target: -5, edMargin: -10 };
+export const DEFAULT_TARGET = -8.5;
 
 export function defaultForecast(ctx: Ctx): Forecast {
-	return holdTarget(ctx, {
-		modelVersion: 1,
+	const baseline = holdTarget(ctx, {
+		modelVersion: 2,
 		name: 'Default scenario',
 		target: BASELINE.target,
 		edMargin: BASELINE.edMargin,
@@ -252,6 +253,7 @@ export function defaultForecast(ctx: Ctx): Forecast {
 		days: defaultDays(ctx),
 		linked: true
 	});
+	return swingToTarget(ctx, baseline, DEFAULT_TARGET);
 }
 
 export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
@@ -259,7 +261,7 @@ export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 }
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
-	if (!f.linked || f.modelVersion === 1) return f;
+	if (!f.linked || f.modelVersion === 2) return f;
 	const defaults = defaultForecast(ctx);
 	const baseline = holdTarget(ctx, {
 		...defaults,
