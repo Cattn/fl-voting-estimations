@@ -331,7 +331,12 @@
 
 	{#if today}
 		<div class="mb-3 hidden md:block">
-			<TodayStats {today} benchmark={todayBenchmark} />
+			<TodayStats
+				{today}
+				benchmark={todayBenchmark}
+				mailBenchmark={forecast.mailMargin}
+				mail={feed.mailDays.find((d) => d.date === today.date)}
+			/>
 		</div>
 	{/if}
 
@@ -949,7 +954,12 @@
 
 			{#if today}
 				<div class="md:hidden">
-					<TodayStats {today} benchmark={todayBenchmark} />
+					<TodayStats
+						{today}
+						benchmark={todayBenchmark}
+						mailBenchmark={forecast.mailMargin}
+						mail={feed.mailDays.find((d) => d.date === today.date)}
+					/>
 				</div>
 			{/if}
 
