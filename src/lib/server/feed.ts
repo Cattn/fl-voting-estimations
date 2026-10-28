@@ -92,7 +92,7 @@ const isFresh = (s: Snapshot | null) => !!s && Date.now() - s.at < TTL_MS;
 
 async function fetchOnce(timeoutMs: number): Promise<FeedData> {
 	const res = await fetch(SOURCE_URL, {
-		headers: { 'user-agent': 'Mozilla/5.0 (fl-ev-estimations)', accept: 'text/html' },
+		headers: { 'user-agent': 'Mozilla/5.0 (fl-voting-estimations)', accept: 'text/html' },
 		signal: AbortSignal.timeout(timeoutMs)
 	});
 	if (!res.ok) throw new Error(`Source responded ${res.status}`);
