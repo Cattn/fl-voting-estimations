@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFeed } from './server/feed.ts';
+import { extractFeed } from '../src/lib/server/feed.ts';
 import {
 	buildCtx,
 	buildHistory,
@@ -17,7 +17,7 @@ import {
 	setIpevHoldingTarget,
 	swingToTarget,
 	upgradeForecast
-} from './model.ts';
+} from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
 	`{date:"${date}",rep:${rep},dem:${dem},npa:${other},oth:0,total:${rep + dem + other}}`;

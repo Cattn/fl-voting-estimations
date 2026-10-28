@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Snapshot } from './store.ts';
+import type { Snapshot } from '../../src/lib/server/store.ts';
 
 const page = `<script>$R[3]={fetchedAt:"2026-10-28T00:00:00Z",fromCache:!1,windowOpen:!0,counties:[],
 mail:{rep:300,dem:500,npa:200,oth:0,total:1000},early:{rep:1100,dem:700,npa:200,oth:0,total:2000},
@@ -12,7 +12,7 @@ const store = vi.hoisted(() => ({
 	background: [] as Promise<unknown>[]
 }));
 
-vi.mock('./store.ts', () => ({
+vi.mock('../../src/lib/server/store.ts', () => ({
 	loadSnapshot: vi.fn(async () => store.snapshot),
 	saveSnapshot: vi.fn(async (s: Snapshot) => {
 		store.snapshot = s;
@@ -37,8 +37,8 @@ afterEach(() => {
 });
 
 const load = async () => ({
-	feed: await import('./feed.ts'),
-	kv: await import('./store.ts')
+	feed: await import('../../src/lib/server/feed.ts'),
+	kv: await import('../../src/lib/server/store.ts')
 });
 
 describe('today mail retention', () => {
