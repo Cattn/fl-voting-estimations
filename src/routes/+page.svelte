@@ -48,9 +48,7 @@
 	let mounted = $state(false);
 
 	const today = $derived(ctx.current);
-	const reportedMail = $derived(
-		feed.mailDays.findLast((d) => d.date <= data.clock.today && d.total > 0)
-	);
+	const reportedMail = $derived(feed.mailDays.find((d) => d.date === data.clock.today));
 	const todayBenchmark = $derived(currentDayBenchmark(ctx));
 	const history = $derived(buildHistory(feed, data.clock.today));
 	const outcome = $derived(computeOutcome(ctx, forecast));

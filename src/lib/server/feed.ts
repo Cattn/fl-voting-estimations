@@ -1,4 +1,5 @@
 import { parseLiteral } from './literal.ts';
+import { floridaClock } from '../model.ts';
 import { loadSnapshot, runInBackground, saveSnapshot, type Snapshot } from './store.ts';
 import type { County, CountyDayCounts, DayCounts, FeedData, PartyCounts } from '#lib/types.ts';
 
@@ -60,6 +61,23 @@ export function extractFeed(html: string): FeedData {
 	return data;
 }
 
+export function retainTodayMail(
+	data: FeedData,
+	previous?: FeedData,
+	today = floridaClock().today
+): FeedData {
+	if (data.mailDays.some((d) => d.date === today && d.total > 0)) return data;
+	const reported = previous?.mailDays.find((d) => d.date === today && d.total > 0);
+	if (!reported) return data;
+	return {
+		...data,
+		mailDays: [
+			...data.mailDays.filter((d) => d.date !== today),
+			{ ...reported, retained: true }
+		].sort((a, b) => a.date.localeCompare(b.date))
+	};
+}
+
 const RETRY_DELAYS_MS = [1500, 3000, 5000];
 const ATTEMPT_TIMEOUT_MS = 8000;
 const TOTAL_BUDGET_MS = 20_000;
@@ -102,7 +120,7 @@ async function fetchWithRetry(): Promise<FeedData> {
 
 async function refresh(): Promise<FeedData> {
 	try {
-		const data = await fetchWithRetry();
+		const data = retainTodayMail(await fetchWithRetry(), cache?.data);
 		cache = { at: Date.now(), data };
 		return data;
 	} catch (e) {
@@ -117,7 +135,8 @@ async function refresh(): Promise<FeedData> {
 export async function refreshSnapshot(): Promise<void> {
 	const started = Date.now();
 	try {
-		const data = await fetchWithRetry();
+		const previous = await loadSnapshot();
+		const data = retainTodayMail(await fetchWithRetry(), previous?.data ?? cache?.data);
 		const snapshot = { at: Date.now(), data };
 		await saveSnapshot(snapshot);
 		cache = snapshot;
@@ -153,7 +172,9 @@ export async function getFeed(): Promise<FeedData> {
 		lastKvCheck = Date.now();
 		kvRead ??= loadSnapshot().finally(() => (kvRead = null));
 		const stored = await kvRead;
-		if (stored && (!cache || stored.at > cache.at)) cache = stored;
+		if (stored && (!cache || stored.at > cache.at)) {
+			cache = { ...stored, data: retainTodayMail(stored.data, cache?.data) };
+		}
 		if (cache && isFresh(cache)) return cache.data;
 	}
 

@@ -94,20 +94,17 @@
 	</div>
 	<div class="card mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
 		<div class="flex items-center font-medium">
-			{mail && mail.date !== today.date ? 'Latest reported mail' : 'Mail reported today'}<Info
-				align="left"
+			Mail reported today<Info align="left"
 				>Mail returns assigned to this date by the source, including any batch uploads. These are
 				already included in the total early-vote chart's reported line alongside IPEV. They are
 				separate from the in-person counts above. The benchmark is the forecast's remaining-mail
 				margin, which is applied to each projected day. Change it under Advanced to update the
-				comparison. If today's row is empty, the latest nonzero batch is shown with its source date
-				instead.</Info
+				comparison. If today's source row disappears or resets to zero, the last nonzero report from
+				today is retained until new counts arrive.</Info
 			>
 		</div>
-		{#if mail && mail.date !== today.date}
-			<span class="text-muted text-xs">
-				Source date: {fmtDay(mail.date)} · No returns assigned to {fmtDay(today.date)} yet
-			</span>
+		{#if mail?.retained}
+			<span class="text-muted text-xs"> Last reported today · awaiting source update </span>
 		{/if}
 		<span class="num">{fmtInt(mail?.total ?? 0)} voters</span>
 		<span class="num {color(mailMargin ?? 0)}">

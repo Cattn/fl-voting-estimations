@@ -22,7 +22,7 @@ vi.mock('./store.ts', () => ({
 
 const old = (): Snapshot => ({
 	at: 0,
-	data: { source: 'x', fetchedAt: 'old', earlyDays: [], mail: { total: 1 } } as never
+	data: { source: 'x', fetchedAt: 'old', earlyDays: [], mailDays: [], mail: { total: 1 } } as never
 });
 
 beforeEach(() => {
@@ -39,6 +39,40 @@ afterEach(() => {
 const load = async () => ({
 	feed: await import('./feed.ts'),
 	kv: await import('./store.ts')
+});
+
+describe('today mail retention', () => {
+	it('keeps today when the source omits or zeroes it without changing overall totals', async () => {
+		const { feed } = await load();
+		const previous = feed.extractFeed(page);
+		previous.mailDays[0].date = '2026-10-28';
+		for (const mailDays of [[], [{ ...previous.mailDays[0], rep: 0, dem: 0, total: 0 }]]) {
+			const incoming = { ...previous, mailDays };
+			const result = feed.retainTodayMail(incoming, previous, '2026-10-28');
+			expect(result.mailDays).toEqual([{ ...previous.mailDays[0], retained: true }]);
+			expect(result.mail).toBe(incoming.mail);
+		}
+	});
+
+	it('accepts a new nonzero report, including downward corrections', async () => {
+		const { feed } = await load();
+		const previous = feed.extractFeed(page);
+		previous.mailDays[0].date = '2026-10-28';
+		const incoming = {
+			...previous,
+			mailDays: [{ ...previous.mailDays[0], rep: 100, dem: 200, total: 500 }]
+		};
+		expect(feed.retainTodayMail(incoming, previous, '2026-10-28')).toBe(incoming);
+	});
+
+	it('never substitutes yesterday or carries counts into the next day', async () => {
+		const { feed } = await load();
+		const previous = feed.extractFeed(page);
+		const incoming = { ...previous, mailDays: [] };
+		expect(feed.retainTodayMail(incoming, previous, '2026-10-28')).toBe(incoming);
+		previous.mailDays[0].date = '2026-10-28';
+		expect(feed.retainTodayMail(incoming, previous, '2026-10-29')).toBe(incoming);
+	});
 });
 
 describe('getFeed', () => {
