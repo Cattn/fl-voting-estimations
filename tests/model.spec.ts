@@ -14,6 +14,7 @@ import {
 	holdTarget,
 	mailRemaining,
 	reconcileDays,
+	reconcileForecast,
 	setIpevHoldingTarget,
 	swingToTarget,
 	upgradeForecast,
@@ -65,14 +66,20 @@ describe('current-day benchmark', () => {
 		const before = buildCtx(feed, open('2026-10-27'));
 		const forecast = defaultForecast(before);
 		const after = buildCtx(feed, open('2026-10-28'));
-		const reconciled = { ...forecast, days: reconcileDays(after, forecast.days) };
+		const reconciled = reconcileForecast(after, forecast);
 		const outcome = computeOutcome(after, reconciled);
 		expect(outcome.benchmarks.every((d) => d.date > '2026-10-28')).toBe(true);
 		expect(outcome.benchmarks.some((d) => d.date === '2026-10-27')).toBe(false);
-		expect(computeOutcome(after, { ...reconciled, days: outcome.benchmarks }).margin).toBeCloseTo(
-			forecast.target,
-			6
-		);
+		expect(reconciled.today).toEqual({
+			...forecast.days.find((d) => d.date === '2026-10-28')!,
+			volume: after.current!.projectedVolume
+		});
+		const benchmarked = {
+			...reconciled,
+			days: outcome.benchmarks,
+			today: { ...reconciled.today!, margin: outcome.todayBenchmark! }
+		};
+		expect(computeOutcome(after, benchmarked).margin).toBeCloseTo(forecast.target, 6);
 		expect(currentDayBenchmark(after)?.date).toBe('2026-10-28');
 	});
 	it('keeps the daily expectation independent of actual counts', () => {
@@ -426,12 +433,57 @@ describe('locked sliders', () => {
 		expect(computeOutcome(ctx, b).margin).toBeCloseTo(f.target, 6);
 	});
 
-	it('never moves the locked current day', () => {
-		const f = defaultForecast(ctx);
-		const before = computeOutcome(ctx, f).components.find((c) => c.key === 'today');
-		const after = computeOutcome(ctx, swingToTarget(ctx, f, -9)).components.find(
-			(c) => c.key === 'today'
+	const rawForecast = (c: ReturnType<typeof buildCtx>) =>
+		reconcileForecast(c, {
+			...defaultForecast(c),
+			edTurnout: 3000,
+			mailFinal: c.feed.mail.total,
+			days: defaultDays(c),
+			today: undefined
+		});
+
+	it('weights today with the upcoming days', () => {
+		const c = buildCtx(countyFeed(), open('2026-10-28'));
+		const raw = rawForecast(c);
+		expect(raw.today!.margin).toBe(currentDayBenchmark(c)!.margin);
+		const held = holdTarget(c, { ...raw, target: -8 });
+		const swing = held.days[0].margin - raw.days[0].margin;
+		expect(swing).not.toBeCloseTo(0, 2);
+		expect(held.today!.margin - raw.today!.margin).toBeCloseTo(swing, 6);
+		expect(computeOutcome(c, held).margin).toBeCloseTo(-8, 6);
+		const swung = swingToTarget(c, held, -10);
+		expect(swung.today!.margin - held.today!.margin).toBeCloseTo(
+			swung.days[0].margin - held.days[0].margin,
+			6
 		);
-		expect(after).toEqual(before);
+		expect(computeOutcome(c, swung).todayBenchmark).toBeCloseTo(swung.today!.margin, 6);
+	});
+
+	it('freezes today once polls close', () => {
+		const feed = countyFeed();
+		feed.earlyDays.push({
+			date: '2026-10-28',
+			rep: 450,
+			dem: 450,
+			npa: 0,
+			oth: 0,
+			total: 900,
+			counties: [county('DAD', 150, 300), county('LEE', 300, 150)]
+		});
+		const c = buildCtx(feed, { today: '2026-10-28', pollsClosed: true });
+		const held = holdTarget(c, { ...rawForecast(c), target: -8 });
+		const swung = swingToTarget(c, held, -10);
+		expect(swung.today).toEqual(held.today);
+		expect(computeOutcome(c, swung).components.find((x) => x.key === 'today')?.volume).toBe(0);
+		expect(computeOutcome(c, swung).margin).toBeCloseTo(-10, 6);
+	});
+
+	it('carries a future day into today at midnight', () => {
+		const before = buildCtx(countyFeed(), open('2026-10-28'));
+		const f = holdTarget(before, { ...rawForecast(before), target: -8 });
+		const thursday = f.days.find((d) => d.date === '2026-10-29')!;
+		const after = reconcileForecast(buildCtx(countyFeed(), open('2026-10-29')), f);
+		expect(after.today?.margin).toBe(thursday.margin);
+		expect(after.days.some((d) => d.date === '2026-10-29')).toBe(false);
 	});
 });

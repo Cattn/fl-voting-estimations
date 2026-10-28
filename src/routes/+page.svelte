@@ -14,7 +14,6 @@
 		buildCtx,
 		buildHistory,
 		computeOutcome,
-		currentDayBenchmark,
 		defaultForecast,
 		fmtDay,
 		fmtInt,
@@ -24,11 +23,12 @@
 		mailRemaining,
 		marginOf,
 		projectPath,
-		reconcileDays,
+		reconcileForecast,
 		REGISTRATION,
 		setIpevHoldingTarget,
 		shiftDays,
 		swingToTarget,
+		todayPlan,
 		upgradeForecast
 	} from '#lib/model.ts';
 	import { decodeForecast, encodeForecast, loadSaved, storeSaved } from '#lib/saved.ts';
@@ -53,11 +53,18 @@
 		feed.mailDays.find((d) => d.date === data.clock.today && d.total > 0) ??
 			(feed.lastReportedMail?.date === data.clock.today ? feed.lastReportedMail : undefined)
 	);
-	const todayBenchmark = $derived(currentDayBenchmark(ctx));
 	const history = $derived(buildHistory(feed, data.clock.today));
 	const outcome = $derived(computeOutcome(ctx, forecast));
+	const plan = $derived(todayPlan(ctx, forecast));
+	const todayBenchmark = $derived(
+		today && outcome.todayBenchmark !== null
+			? { date: today.date, volume: today.projectedVolume, margin: outcome.todayBenchmark }
+			: null
+	);
 	const scenarioPath = $derived(projectPath(ctx, forecast, forecast.days));
-	const benchmarkPath = $derived(projectPath(ctx, forecast, outcome.benchmarks));
+	const benchmarkPath = $derived(
+		projectPath(ctx, forecast, outcome.benchmarks, outcome.todayBenchmark ?? undefined)
+	);
 	const mailRem = $derived(mailRemaining(ctx, forecast));
 	const live = $derived.by(() => {
 		const total = feed.mail.total + feed.early.total;
@@ -101,13 +108,14 @@
 						date: today.date,
 						inProgress: !today.pollsClosed,
 						reference: todayBenchmark?.margin,
-						scenario: today.pollsClosed
-							? undefined
-							: {
-									margin: today.projectedMargin,
-									volume: today.projectedVolume,
-									gap: (today.projectedVolume * today.projectedMargin) / 100
-								},
+						scenario:
+							today.pollsClosed || !plan
+								? undefined
+								: {
+										margin: plan.projectedMargin,
+										volume: plan.volume,
+										gap: (plan.volume * plan.projectedMargin) / 100
+									},
 						reported: today.soFar?.total
 							? {
 									margin: marginOf(today.soFar),
@@ -182,10 +190,12 @@
 	});
 
 	$effect(() => {
-		const dates = ctx.futureDates.join();
-		const current = untrack(() => forecast.days.map((d) => d.date).join());
+		const dates = [ctx.current?.date, ...ctx.futureDates].join();
+		const current = untrack(() =>
+			[forecast.today?.date, ...forecast.days.map((d) => d.date)].join()
+		);
 		if (dates !== current) {
-			untrack(() => (forecast.days = reconcileDays(ctx, $state.snapshot(forecast.days))));
+			untrack(() => (forecast = reconcileForecast(ctx, $state.snapshot(forecast))));
 		}
 	});
 
@@ -201,14 +211,15 @@
 		const mailFinal =
 			f.mailFinal ??
 			(f.mailRemaining !== undefined ? feed.mail.total + f.mailRemaining : base.mailFinal);
-		forecast = {
+		forecast = reconcileForecast(ctx, {
 			...base,
 			...f,
 			mailFinal,
 			mailRemaining: undefined,
 			linked: f.linked ?? false,
-			days: reconcileDays(ctx, f.days ?? [])
-		};
+			days: f.days ?? [],
+			today: f.today
+		});
 	}
 
 	function setTarget(v: number) {
@@ -220,11 +231,13 @@
 		const f = $state.snapshot(forecast);
 		forecast = forecast.linked
 			? setIpevHoldingTarget(ctx, f, v)
-			: shiftDays(f, v - outcome.scenarioIpevMargin);
+			: shiftDays(ctx, f, v - outcome.scenarioIpevMargin);
 	}
 
 	function resetDays() {
-		forecast.days = defaultForecast(ctx).days;
+		const defaults = defaultForecast(ctx);
+		forecast.days = defaults.days;
+		forecast.today = defaults.today;
 	}
 
 	function resetAll() {
@@ -521,9 +534,10 @@
 					<div class="text-2 mt-4 mb-1 flex items-center text-sm">
 						Today (locked)
 						<Info align="left">
-							Projected full day: {fmtInt(today.projectedVolume)} at {fmtMargin(
-								today.projectedMargin
-							)}, so {fmtInt(today.restVolume)} more expected. {today.pollsClosed
+							Needed full day: {fmtInt(today.projectedVolume)} at {fmtMargin(
+								plan?.projectedMargin ?? today.projectedMargin
+							)}, so {fmtInt(today.restVolume)} more expected. Today's margin moves with the upcoming
+							days when the target or days change. {today.pollsClosed
 								? 'Polls have closed, so nothing more is projected, but late uploads still count.'
 								: ''} Becomes reported data after midnight.
 						</Info>
@@ -871,8 +885,8 @@
 							{/each}
 							{#if today}
 								{@const hasCounts = (today.soFar?.total ?? 0) > 0}
-								{@const expectedMargin = todayBenchmark?.margin ?? today.projectedMargin}
-								{@const expectedVolume = todayBenchmark?.volume ?? today.projectedVolume}
+								{@const expectedMargin = plan?.margin ?? today.projectedMargin}
+								{@const expectedVolume = today.projectedVolume}
 								{@const rowMargin = hasCounts ? marginOf(today.soFar!) : expectedMargin}
 								{@const rowGap = hasCounts
 									? today.soFar!.dem - today.soFar!.rep
@@ -902,7 +916,7 @@
 									<td class="text-right {marginClass(rowMargin)}">
 										{fmtMargin(rowMargin)}
 										{#if hasCounts && todayBenchmark}<span class="text-muted block text-xs"
-												>Expected {fmtMargin(todayBenchmark.margin, 2)}</span
+												>Needed {fmtMargin(todayBenchmark.margin, 2)}</span
 											>{/if}
 									</td>
 									<td class="text-right">
@@ -910,9 +924,7 @@
 									</td>
 									{#if !forecast.linked}
 										<td class="text-muted text-right"
-											>{todayBenchmark ? fmtMargin(todayBenchmark.margin, 2) : '-'}<span
-												class="block text-xs">daily expectation</span
-											></td
+											>{todayBenchmark ? fmtMargin(todayBenchmark.margin, 2) : '-'}</td
 										>
 										<td class="text-muted text-right"
 											>{todayBenchmark
@@ -956,8 +968,8 @@
 					</table>
 				</div>
 				<p class="text-muted mt-3 pb-1 text-xs">
-					Shaded rows include projections. Today's benchmark is the same daily expectation used in
-					the cards.
+					Shaded rows include projections. Today's needed margin is weighted with the upcoming days,
+					the same as in the cards.
 				</p>
 			</section>
 

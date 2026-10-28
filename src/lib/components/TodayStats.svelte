@@ -47,10 +47,10 @@
 		<div class="card p-4">
 			<div class="text-muted flex items-center text-xs font-medium uppercase">
 				Vs. today's forecast<Info align="left"
-					>Compares today's actual margin with the same daily expectation shown in the table. The
-					expectation uses completed days and stays separate from today's actual counts, including
-					after polls close. A positive difference favors Democrats; a negative difference favors
-					Republicans.</Info
+					>Compares today's actual margin with the margin today needs in your forecast, the same
+					figure shown in the table. Today is weighted with the upcoming days, so it moves when the
+					target or those days change, but not with today's own counts. A positive difference favors
+					Democrats; a negative difference favors Republicans.</Info
 				>
 			</div>
 			<div class="num mt-1 text-2xl font-semibold {color(delta ?? 0)}">
@@ -64,7 +64,7 @@
 						: `${delta > 0 ? 'D' : 'R'} ahead of benchmark`}
 			</div>
 			{#if benchmark}<div class="text-muted mt-1 text-xs">
-					Expected {fmtMargin(benchmark.margin, 2)}
+					Needed {fmtMargin(benchmark.margin, 2)}
 				</div>{/if}
 		</div>
 		<div class="card p-4">

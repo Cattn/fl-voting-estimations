@@ -55,5 +55,6 @@ export interface Forecast {
 	mailRemaining?: number;
 	mailMargin: number;
 	days: ForecastDay[];
+	today?: ForecastDay;
 	linked?: boolean;
 }
