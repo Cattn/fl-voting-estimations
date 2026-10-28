@@ -251,8 +251,11 @@ export function currentDayBenchmark(ctx: Ctx): ForecastDay | null {
 	return projectDays(ctx.complete, [ctx.current.date])[0] ?? null;
 }
 
-export function defaultMailMargin(feed: FeedData): number {
-	return Math.round(weighted(feed.mailDays.slice(-5)) * 10) / 10;
+export const MAIL_SWING = 0.25;
+
+export function defaultMailMargin(feed: FeedData, before?: string): number {
+	const days = feed.mailDays.filter((d) => !before || d.date < before);
+	return Math.round(weighted(days.slice(-7)) * 10) / 10;
 }
 
 export function defaultMailFinal(feed: FeedData): number {
@@ -266,7 +269,7 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 export const BASELINE = { target: -5, edMargin: -10 };
 export const DEFAULT_TARGET = -8.5;
 
-export const MODEL_VERSION = 4;
+export const MODEL_VERSION = 5;
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	const baseline = holdTarget(
@@ -278,7 +281,7 @@ export function defaultForecast(ctx: Ctx): Forecast {
 			edMargin: BASELINE.edMargin,
 			edTurnout: 2_000_000,
 			mailFinal: defaultMailFinal(ctx.feed),
-			mailMargin: defaultMailMargin(ctx.feed),
+			mailMargin: defaultMailMargin(ctx.feed, ctx.current?.date),
 			days: defaultDays(ctx),
 			linked: true
 		})
@@ -371,16 +374,23 @@ function reshapeDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 
 const legacyDays = (ctx: Ctx) => projectDays(ctx.complete, ctx.futureDates, false);
 
-function isUntouchedDefault(ctx: Ctx, f: Forecast): boolean {
-	if (!f.linked || f.target !== DEFAULT_TARGET || f.edTurnout !== 2_000_000) return false;
-	const mailBase = f.mailMargin - (f.edMargin - BASELINE.edMargin);
-	if (Math.abs(mailBase * 10 - Math.round(mailBase * 10)) > 1e-6) return false;
+function onlyTargetMoved(ctx: Ctx, f: Forecast): boolean {
+	if (!f.linked) return false;
+	const onTenth = (weight: number) => {
+		const base = (f.mailMargin - weight * (f.edMargin - BASELINE.edMargin)) * 10;
+		return Math.abs(base - Math.round(base)) < 1e-6;
+	};
+	if (!onTenth(1) && !onTenth(MAIL_SWING)) return false;
 	return hasShape(legacyDays(ctx), f.days) || hasShape(defaultDays(ctx), f.days);
 }
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	if (isUntouchedDefault(ctx, f)) return { ...defaultForecast(ctx), name: f.name };
+	if (onlyTargetMoved(ctx, f)) {
+		return f.target === DEFAULT_TARGET && f.edTurnout === 2_000_000
+			? { ...defaultForecast(ctx), name: f.name }
+			: rebaseForecast(ctx, f);
+	}
 	if (f.linked && (f.modelVersion ?? 1) < 2) return rebaseForecast(ctx, f);
 	if (!hasShape(legacyDays(ctx), f.days)) return { ...f, modelVersion: MODEL_VERSION };
 	return { ...f, modelVersion: MODEL_VERSION, days: reshapeDays(ctx, f.days) };
@@ -525,12 +535,17 @@ export function holdTarget(ctx: Ctx, f: Forecast): Forecast {
 export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
 	const base = holdTarget(ctx, f);
 	const o = computeOutcome(ctx, base);
-	const swingable = o.swingVolume + base.edTurnout + mailRemaining(ctx, base);
+	const swingable = o.swingVolume + base.edTurnout + MAIL_SWING * mailRemaining(ctx, base);
 	if (!swingable) return { ...base, target };
 	const delta = ((target - base.target) * o.total) / swingable;
 	return shiftDays(
 		ctx,
-		{ ...base, target, edMargin: base.edMargin + delta, mailMargin: base.mailMargin + delta },
+		{
+			...base,
+			target,
+			edMargin: base.edMargin + delta,
+			mailMargin: base.mailMargin + MAIL_SWING * delta
+		},
 		delta
 	);
 }

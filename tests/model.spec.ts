@@ -19,6 +19,7 @@ import {
 	swingToTarget,
 	upgradeForecast,
 	BASELINE,
+	MAIL_SWING,
 	MODEL_VERSION
 } from '../src/lib/model.ts';
 
@@ -335,6 +336,7 @@ describe('locked sliders', () => {
 				modelVersion: 2,
 				linked,
 				target: -6,
+				mailMargin: defaults.mailMargin + 0.37,
 				days: defaults.days.map((d) => ({ ...d, margin: legacyShape[d.date] - 7.3 }))
 			};
 			const upgraded = upgradeForecast(ctx, old);
@@ -347,6 +349,26 @@ describe('locked sliders', () => {
 			expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(computeOutcome(ctx, old).margin, 6);
 			expect(upgradeForecast(ctx, upgraded)).toBe(upgraded);
 		}
+	});
+
+	it('bases remaining mail on the last seven complete days', () => {
+		const mail = (date: string, rep: number, dem: number) => ({
+			date,
+			rep,
+			dem,
+			npa: 0,
+			oth: 0,
+			total: rep + dem
+		});
+		const feed = {
+			...extractFeed(html),
+			mailDays: [
+				mail('2026-10-20', 0, 1000),
+				...['21', '22', '23', '24', '25', '26', '27'].map((dd) => mail(`2026-10-${dd}`, 450, 550)),
+				mail('2026-10-28', 1000, 0)
+			]
+		};
+		expect(defaultMailMargin(feed, '2026-10-28')).toBe(10);
 	});
 
 	it('resets forecasts still on an older default to the current default', () => {
@@ -372,6 +394,33 @@ describe('locked sliders', () => {
 			name: 'Mine'
 		});
 		expect(upgradeForecast(ctx, { ...stale, target: -7 }).target).toBe(-7);
+	});
+
+	it('rebuilds forecasts that only moved the target on the current math', () => {
+		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
+		const defaults = defaultForecast(ctx);
+		const delta = 2.6;
+		const old = {
+			...defaults,
+			modelVersion: 4,
+			target: -6,
+			edTurnout: 3000,
+			mailFinal: defaults.mailFinal + 200,
+			today: undefined,
+			edMargin: BASELINE.edMargin + delta,
+			mailMargin: 9.4 + delta,
+			days: defaults.days.map((d) => ({ ...d, margin: d.margin + 4.1 }))
+		};
+		const upgraded = upgradeForecast(ctx, old);
+		expect(upgraded.modelVersion).toBe(MODEL_VERSION);
+		expect(upgraded.target).toBe(-6);
+		expect(upgraded.edTurnout).toBe(3000);
+		expect(upgraded.mailFinal).toBe(old.mailFinal);
+		expect(upgraded.mailMargin - defaultMailMargin(ctx.feed, '2026-10-28')).toBeCloseTo(
+			MAIL_SWING * (upgraded.edMargin - BASELINE.edMargin),
+			6
+		);
+		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(-6, 6);
 	});
 
 	it('leaves forecasts with hand-edited days alone', () => {
@@ -400,7 +449,7 @@ describe('locked sliders', () => {
 		const shift = f.edMargin - baseline.edMargin;
 		expect(f.target).toBe(-8.5);
 		expect(f).toEqual(swingToTarget(ctx, baseline, -8.5));
-		expect(f.mailMargin - baseline.mailMargin).toBeCloseTo(shift, 6);
+		expect(f.mailMargin - baseline.mailMargin).toBeCloseTo(MAIL_SWING * shift, 6);
 		expect(
 			computeOutcome(ctx, f).scenarioIpevMargin - computeOutcome(ctx, baseline).scenarioIpevMargin
 		).toBeCloseTo(shift, 6);
@@ -424,14 +473,14 @@ describe('locked sliders', () => {
 		expect(computeOutcome(ctx, repaired).margin).toBeCloseTo(-8.5, 8);
 	});
 
-	it('swings ED, future IPEV, and remaining mail by the same amount to hit a new target', () => {
+	it('swings ED, future IPEV, and remaining mail together, with mail damped, to hit a new target', () => {
 		const f = defaultForecast(ctx);
 		const before = computeOutcome(ctx, f).scenarioIpevMargin;
 		const g = swingToTarget(ctx, f, -10);
 		const o = computeOutcome(ctx, g);
 		expect(o.margin).toBeCloseTo(-10, 6);
 		expect(o.scenarioIpevMargin - before).toBeCloseTo(g.edMargin - f.edMargin, 6);
-		expect(g.mailMargin - f.mailMargin).toBeCloseTo(g.edMargin - f.edMargin, 6);
+		expect(g.mailMargin - f.mailMargin).toBeCloseTo(MAIL_SWING * (g.edMargin - f.edMargin), 6);
 		expect(g.mailFinal).toBe(f.mailFinal);
 		expect(g.edMargin).toBeLessThan(-10);
 	});
