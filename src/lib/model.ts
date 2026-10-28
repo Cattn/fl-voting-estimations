@@ -366,10 +366,13 @@ export function holdTarget(ctx: Ctx, f: Forecast): Forecast {
 export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
 	const base = holdTarget(ctx, f);
 	const o = computeOutcome(ctx, base);
-	const swingable = o.ipevRemainingVolume + base.edTurnout;
+	const swingable = o.ipevRemainingVolume + base.edTurnout + mailRemaining(ctx, base);
 	if (!swingable) return { ...base, target };
 	const delta = ((target - base.target) * o.total) / swingable;
-	return shiftDays({ ...base, target, edMargin: base.edMargin + delta }, delta);
+	return shiftDays(
+		{ ...base, target, edMargin: base.edMargin + delta, mailMargin: base.mailMargin + delta },
+		delta
+	);
 }
 
 export function setIpevHoldingTarget(ctx: Ctx, f: Forecast, ipevMargin: number): Forecast {

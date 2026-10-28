@@ -221,14 +221,30 @@ describe('locked sliders', () => {
 		expect(computeOutcome(ctx, f).margin).toBeCloseTo(-5, 6);
 	});
 
-	it('swings ED and IPEV by the same amount to hit a new target', () => {
+	it('swings ED, future IPEV, and remaining mail by the same amount to hit a new target', () => {
 		const f = defaultForecast(ctx);
 		const before = computeOutcome(ctx, f).scenarioIpevMargin;
 		const g = swingToTarget(ctx, f, -8);
 		const o = computeOutcome(ctx, g);
 		expect(o.margin).toBeCloseTo(-8, 6);
 		expect(o.scenarioIpevMargin - before).toBeCloseTo(g.edMargin - f.edMargin, 6);
+		expect(g.mailMargin - f.mailMargin).toBeCloseTo(g.edMargin - f.edMargin, 6);
+		expect(g.mailFinal).toBe(f.mailFinal);
 		expect(g.edMargin).toBeLessThan(-10);
+	});
+
+	it('can swing a forecast with only remaining mail', () => {
+		const mailCtx = { ...ctx, current: null, futureDates: [] };
+		const f = {
+			...defaultForecast(mailCtx),
+			days: [],
+			edTurnout: 0,
+			mailFinal: mailCtx.feed.mail.total + 1000
+		};
+		const target = computeOutcome(mailCtx, f).margin - 1;
+		const g = swingToTarget(mailCtx, { ...f, target: computeOutcome(mailCtx, f).margin }, target);
+		expect(computeOutcome(mailCtx, g).margin).toBeCloseTo(target, 6);
+		expect(g.mailMargin).toBeLessThan(f.mailMargin);
 	});
 
 	it('solves ED when IPEV is moved and IPEV when ED is moved', () => {
