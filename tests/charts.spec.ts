@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { marginChartOption } from './charts.ts';
-import type { HistoryPoint } from './model.ts';
+import { marginChartOption } from '../src/lib/charts.ts';
+import type { HistoryPoint } from '../src/lib/model.ts';
 
 describe('reported chart dates', () => {
 	it('includes reported today and its projection on the same date', () => {
