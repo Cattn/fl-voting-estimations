@@ -11,6 +11,9 @@ importers:
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
+      seroval:
+        specifier: ^1.7.3
+        version: 1.7.3
       topojson-client:
         specifier: ^3.1.0
         version: 3.1.0
@@ -1141,6 +1144,10 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  seroval@1.7.3:
+    resolution: {integrity: sha512-fYkZS/GrMJhj1CW+IDoPlILRmYl5/S9L/OYju/sA2K/HQ3G5JBWDZHxaUWVZV/0hfAC2n1+9ysBRDtqMbMXvzA==}
+    engines: {node: '>=20'}
+
   sharp@0.35.5:
     resolution: {integrity: sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g==}
     engines: {node: '>=20.9.0'}
@@ -2145,6 +2152,8 @@ snapshots:
       mri: 1.2.0
 
   semver@7.8.5: {}
+
+  seroval@1.7.3: {}
 
   sharp@0.35.5(@types/node@26.6.5):
     dependencies:

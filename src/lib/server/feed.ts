@@ -1,9 +1,10 @@
 import { parseLiteral } from './literal.ts';
+import { fetchSource, SOURCE_URL } from './source.ts';
 import { floridaClock } from '../model.ts';
 import { loadSnapshot, runInBackground, saveSnapshot, type Snapshot } from './store.ts';
 import type { County, CountyDayCounts, DayCounts, FeedData, PartyCounts } from '#lib/types.ts';
 
-export const SOURCE_URL = 'https://acorn-maple-earth-lake.grok.me/';
+export { SOURCE_URL } from './source.ts';
 const TTL_MS = 3 * 60 * 1000;
 
 let cache: Snapshot | null = null;
@@ -30,7 +31,10 @@ export function extractFeed(html: string): FeedData {
 	const anchor = html.indexOf('{fetchedAt:');
 	if (anchor < 0) throw new Error('Could not find turnout payload in source page');
 	const raw = parseLiteral(html, anchor) as Record<string, unknown>;
+	return normalizeFeed(raw);
+}
 
+function normalizeFeed(raw: Record<string, unknown>): FeedData {
 	const counties = ((raw.counties as unknown[]) ?? []).map((c): County => {
 		const o = c as Record<string, unknown>;
 		return {
@@ -46,6 +50,8 @@ export function extractFeed(html: string): FeedData {
 	const data: FeedData = {
 		source: SOURCE_URL,
 		fetchedAt: String(raw.fetchedAt),
+		partial: Boolean(raw.partial),
+		received: typeof raw.received === 'number' ? raw.received : undefined,
 		windowOpen: Boolean(raw.windowOpen),
 		registered: Number(raw.registered) || 0,
 		mail: party(raw.mail),
@@ -91,12 +97,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const isFresh = (s: Snapshot | null) => !!s && Date.now() - s.at < TTL_MS;
 
 async function fetchOnce(timeoutMs: number): Promise<FeedData> {
-	const res = await fetch(SOURCE_URL, {
-		headers: { 'user-agent': 'Mozilla/5.0 (fl-voting-estimations)', accept: 'text/html' },
-		signal: AbortSignal.timeout(timeoutMs)
-	});
-	if (!res.ok) throw new Error(`Source responded ${res.status}`);
-	return extractFeed(await res.text());
+	return normalizeFeed(await fetchSource(AbortSignal.timeout(timeoutMs)));
 }
 
 async function fetchWithRetry(): Promise<FeedData> {

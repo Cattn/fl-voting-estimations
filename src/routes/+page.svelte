@@ -358,6 +358,10 @@
 			<p class="w-full rounded-lg px-3 py-2 text-sm" style:background="var(--wash)" role="status">
 				⚠ Source unavailable - showing data from {fetched}.
 			</p>
+		{:else if feed.partial}
+			<p class="w-full rounded-lg px-3 py-2 text-sm" style:background="var(--wash)" role="status">
+				⚠ Source updating - data received from {feed.received ?? 0}/67 counties.
+			</p>
 		{/if}
 	</header>
 
