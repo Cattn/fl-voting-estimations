@@ -238,7 +238,7 @@ export function mailRemaining(ctx: Ctx, f: Forecast): number {
 	return Math.max(0, f.mailFinal - ctx.feed.mail.total);
 }
 
-export const BASELINE = { target: -5, edMargin: -10 };
+export const BASELINE = { target: -8.5, edMargin: -10 };
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	return holdTarget(ctx, {
