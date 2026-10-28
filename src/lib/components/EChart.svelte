@@ -44,8 +44,19 @@
 		const update = () => (mobile = media.matches);
 		update();
 		media.addEventListener('change', update);
-		chart = echarts.init(el, undefined, { renderer: 'svg' });
-		const ro = new ResizeObserver(() => chart?.resize());
+		const resize = () => {
+			const width = el.clientWidth;
+			const height = el.clientHeight;
+			if (width <= 0 || height <= 0) return;
+			if (!chart) {
+				chart = echarts.init(el, undefined, { renderer: 'svg', width, height });
+			} else {
+				chart.resize({ width, height });
+			}
+			chart.setOption(displayOption, { notMerge: true });
+		};
+		resize();
+		const ro = new ResizeObserver(resize);
 		ro.observe(el);
 		return () => {
 			media.removeEventListener('change', update);
@@ -55,7 +66,10 @@
 	});
 
 	$effect(() => {
-		chart?.setOption(displayOption, { notMerge: true });
+		const nextOption = displayOption;
+		if (el?.clientWidth > 0 && el.clientHeight > 0) {
+			chart?.setOption(nextOption, { notMerge: true });
+		}
 	});
 </script>
 
