@@ -6,6 +6,9 @@ import {
 	computeOutcome,
 	currentDayBenchmark,
 	defaultForecast,
+	defaultDays,
+	defaultMailFinal,
+	defaultMailMargin,
 	floridaClock,
 	fmtMargin,
 	holdTarget,
@@ -250,11 +253,41 @@ describe('locked sliders', () => {
 		expect(computeOutcome(ctx, upgraded).margin).toBeCloseTo(old.target, 6);
 	});
 
-	it('starts from the R+8.5 / R+10 baseline exactly on target', () => {
+	it('reaches the R+8.5 default by swinging all remaining margins from the R+5 baseline', () => {
 		const f = defaultForecast(ctx);
+		const baseline = holdTarget(ctx, {
+			...f,
+			target: -5,
+			edMargin: -10,
+			mailFinal: defaultMailFinal(ctx.feed),
+			mailMargin: defaultMailMargin(ctx.feed),
+			days: defaultDays(ctx)
+		});
+		const shift = f.edMargin - baseline.edMargin;
 		expect(f.target).toBe(-8.5);
-		expect(f.edMargin).toBe(-10);
+		expect(f).toEqual(swingToTarget(ctx, baseline, -8.5));
+		expect(f.mailMargin - baseline.mailMargin).toBeCloseTo(shift, 6);
+		expect(
+			computeOutcome(ctx, f).scenarioIpevMargin - computeOutcome(ctx, baseline).scenarioIpevMargin
+		).toBeCloseTo(shift, 6);
 		expect(computeOutcome(ctx, f).margin).toBeCloseTo(-8.5, 6);
+	});
+
+	it('repairs version-one forecasts that concentrated the new target into IPEV', () => {
+		const defaults = defaultForecast(ctx);
+		const broken = {
+			...defaults,
+			modelVersion: 1,
+			edMargin: -10,
+			mailMargin: defaultMailMargin(ctx.feed),
+			days: defaults.days.map((d) => ({ ...d, margin: -29.3 }))
+		};
+		const repaired = upgradeForecast(ctx, broken);
+		expect(repaired.modelVersion).toBe(2);
+		expect(repaired.edMargin).toBeCloseTo(defaults.edMargin, 8);
+		expect(repaired.mailMargin).toBeCloseTo(defaults.mailMargin, 8);
+		repaired.days.forEach((d, i) => expect(d.margin).toBeCloseTo(defaults.days[i].margin, 8));
+		expect(computeOutcome(ctx, repaired).margin).toBeCloseTo(-8.5, 8);
 	});
 
 	it('swings ED, future IPEV, and remaining mail by the same amount to hit a new target', () => {
