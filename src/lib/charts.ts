@@ -139,12 +139,18 @@ export function marginChartOption(
 						return `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, d.value)}">${fmtMargin(d.value, 2)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(d.gap)} lead · ${fmtInt(d.total)} voters</div>`;
 					});
 				const sc = rows.find((r) => r.data!.kind === 'Your scenario')?.data;
+				const reported = rows.find((r) => r.data!.kind === 'Reported so far')?.data;
+				const delta = reported && sc ? reported.value - sc.value : null;
+				const liveDiff =
+					delta === null
+						? ''
+						: `<div style="border-top:1px solid ${p.axis};margin-top:4px;padding-top:4px;color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">Vs. forecast: ${Math.abs(delta) < 0.005 ? 'On forecast currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
 				const bm = rows.find((r) => r.data!.kind === 'Benchmark path to target')?.data;
 				const diff =
 					sc && bm
 						? `<div style="border-top:1px solid ${p.axis};margin-top:4px;padding-top:4px;color:${p.ink2};font-size:11px">Difference: ${fmtInt(Math.abs(sc.gap - bm.gap))} votes ${sc.gap < bm.gap ? 'more Republican' : 'more Democratic'} than the benchmark</div>`
 						: '';
-				return `<div style="min-width:190px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(rows[0].axisValue, true)}</div>${lines.join('')}${diff}</div>`;
+				return `<div style="min-width:190px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(rows[0].axisValue, true)}</div>${lines.join('')}${liveDiff}${diff}</div>`;
 			}
 		},
 		visualMap: {
@@ -276,11 +282,19 @@ export function dailyChartOption(
 			formatter: (params: unknown) => {
 				const i = (params as { dataIndex: number }[])[0]?.dataIndex ?? 0;
 				const r = rows[i];
+				const delta =
+					r.inProgress && r.reported && r.reported.volume > 0 && r.scenario
+						? r.reported.margin - r.scenario.margin
+						: null;
+				const comparison =
+					delta === null
+						? ''
+						: `<div style="color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">Vs. projected: ${Math.abs(delta) < 0.005 ? 'On projection currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
 				const line = (label: string, x?: DailyRow['reported']) =>
 					x
 						? `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, x.margin)}">${fmtMargin(x.margin)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(x.gap)} lead · ${fmtInt(x.volume)} votes</div>`
 						: '';
-				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Expected: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Projected full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.inProgress ? comparison : r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Expected: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
 			}
 		},
 		xAxis: {
