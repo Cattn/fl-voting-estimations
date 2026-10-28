@@ -20,6 +20,7 @@ export interface CountyDayCounts extends PartyCounts {
 
 export interface DayCounts extends PartyCounts {
 	date: string;
+	retained?: boolean;
 	counties?: CountyDayCounts[];
 }
 
