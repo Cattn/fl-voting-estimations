@@ -1,16 +1,16 @@
-import { env, waitUntil } from 'cloudflare:workers';
+import { env, waitUntil } from './bindings.ts';
 import type { FeedData } from '#lib/types.ts';
+import type { ElectionRecord } from '#lib/live.ts';
 
 const KEY = 'feed:v1';
 
 export interface Snapshot {
 	at: number;
 	data: FeedData;
+	election?: ElectionRecord;
 }
 
-type Bindings = { FEED_CACHE?: KVNamespace };
-
-const kv = () => (env as Bindings).FEED_CACHE;
+const kv = () => (env as Cloudflare.Env).FEED_CACHE;
 
 export async function loadSnapshot(): Promise<Snapshot | null> {
 	try {
@@ -23,7 +23,10 @@ export async function loadSnapshot(): Promise<Snapshot | null> {
 export async function saveSnapshot(snapshot: Snapshot): Promise<void> {
 	const binding = kv();
 	if (!binding) throw new Error('FEED_CACHE binding is missing');
-	await binding.put(KEY, JSON.stringify(snapshot));
+	const body = JSON.stringify(snapshot);
+	if (new TextEncoder().encode(body).byteLength > 1_500_000)
+		throw new Error('Published snapshot exceeded storage budget');
+	await binding.put(KEY, body);
 }
 
 export function runInBackground(task: Promise<unknown>) {

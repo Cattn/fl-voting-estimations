@@ -39,8 +39,6 @@
 	import type { Forecast } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
-	const AUTO_REFRESH_MS = 5 * 60 * 1000;
-
 	let { data }: PageProps = $props();
 	const feed = $derived(data.feed);
 	const ctx = $derived(buildCtx(data.feed, data.clock));
@@ -173,18 +171,6 @@
 		const initial = shared ?? (stored?.linked === undefined ? null : stored);
 		if (initial) applyForecast(initial);
 		mounted = true;
-
-		const timer = setInterval(() => {
-			if (document.visibilityState === 'visible') void refresh();
-		}, AUTO_REFRESH_MS);
-		const onVisible = () => {
-			if (document.visibilityState === 'visible') void refresh();
-		};
-		document.addEventListener('visibilitychange', onVisible);
-		return () => {
-			clearInterval(timer);
-			document.removeEventListener('visibilitychange', onVisible);
-		};
 	});
 
 	$effect(() => {

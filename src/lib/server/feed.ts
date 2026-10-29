@@ -11,7 +11,12 @@ let cache: Snapshot | null = null;
 
 const party = (p: unknown): PartyCounts => {
 	const o = (p ?? {}) as Record<string, unknown>;
-	const n = (k: string) => (typeof o[k] === 'number' ? (o[k] as number) : 0);
+	const n = (k: string) => {
+		if (p === undefined || p === null) return 0;
+		if (typeof o[k] !== 'number' || !Number.isFinite(o[k]) || (o[k] as number) < 0)
+			throw new Error(`Invalid turnout field ${k}`);
+		return o[k] as number;
+	};
 	return { rep: n('rep'), dem: n('dem'), npa: n('npa'), oth: n('oth'), total: n('total') };
 };
 
@@ -35,14 +40,21 @@ export function extractFeed(html: string): FeedData {
 }
 
 function normalizeFeed(raw: Record<string, unknown>): FeedData {
+	if (!raw.mail || !raw.early || !Number.isFinite(Date.parse(String(raw.fetchedAt))))
+		throw new Error('Source payload is missing cumulative turnout');
 	const counties = ((raw.counties as unknown[]) ?? []).map((c): County => {
 		const o = c as Record<string, unknown>;
+		if (!o.mail || !o.early || typeof o.registered !== 'number' || o.registered <= 0)
+			throw new Error('Source county is missing cumulative turnout or registration');
 		return {
 			code: String(o.code),
 			name: String(o.name),
 			registered: Number(o.registered) || 0,
 			mail: party(o.mail),
-			early: party(o.early)
+			early: party(o.early),
+			...(o.eday ? { eday: party(o.eday) } : {}),
+			...(typeof o.status === 'string' ? { status: o.status } : {}),
+			...(typeof o.updated === 'string' ? { updated: o.updated } : {})
 		};
 	});
 
@@ -56,14 +68,14 @@ function normalizeFeed(raw: Record<string, unknown>): FeedData {
 		registered: Number(raw.registered) || 0,
 		mail: party(raw.mail),
 		early: party(raw.early),
+		...(raw.eday ? { eday: party(raw.eday) } : {}),
 		outstanding: party(raw.outstanding),
 		counties,
 		earlyDays: ((raw.earlyDays as unknown[]) ?? []).map(day).sort(byDate),
 		mailDays: ((raw.mailDays as unknown[]) ?? []).map(day).sort(byDate)
 	};
 
-	if (!data.earlyDays.length || !data.mail.total)
-		throw new Error('Source payload is missing daily data');
+	if (!data.mail.total) throw new Error('Source payload is missing mail data');
 	return data;
 }
 
@@ -100,7 +112,7 @@ async function fetchOnce(timeoutMs: number): Promise<FeedData> {
 	return normalizeFeed(await fetchSource(AbortSignal.timeout(timeoutMs)));
 }
 
-async function fetchWithRetry(): Promise<FeedData> {
+export async function fetchWithRetry(): Promise<FeedData> {
 	const deadline = Date.now() + TOTAL_BUDGET_MS;
 	let lastError: unknown;
 	for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {

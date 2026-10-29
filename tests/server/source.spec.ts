@@ -10,6 +10,10 @@ const script =
 	'var XY=fn({method:`GET`}).handler(server(`' + id + '`));await XY({data:{force:false}})';
 
 describe('source data transport', () => {
+	it('bounds source responses before decoding untrusted data', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('x'.repeat(2_000_001))));
+		await expect(fetchSource(new AbortController().signal)).rejects.toThrow('size limit');
+	});
 	it('discovers the current build endpoint and decodes its data and partial status', async () => {
 		const data = { fetchedAt: '2026-10-28T23:00:00Z', partial: true, received: 66 };
 		const fetch = vi

@@ -8,6 +8,13 @@
 	"triggers": { "crons": ["*/3 * * * *"] },
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat"],
+	"d1_databases": [
+		{
+			"binding": "ELECTION_HISTORY",
+			"database_name": "fl-ev-history",
+			"database_id": "f0d87ca0-be5c-425c-a97a-b2347e87c849"
+		}
+	],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
