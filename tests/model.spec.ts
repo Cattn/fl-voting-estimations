@@ -27,7 +27,8 @@ import {
 	AUTO_IPEV_SWING,
 	AUTO_IPEV_LIMIT,
 	WEEKEND_CARRY,
-	FINAL_DAY_TURNOUT
+	FINAL_DAY_TURNOUT,
+	missingVolume
 } from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -335,20 +336,48 @@ describe('day status', () => {
 		expect(evening.current?.projectedVolume).toBe(1000);
 	});
 
-	it('expects late uploads between 7 PM and the 9 PM cutoff', () => {
-		const big = {
-			...feed,
-			earlyDays: feed.earlyDays.map((d) =>
-				d.date === '2026-10-27'
-					? { ...d, rep: 50_000, dem: 40_000, npa: 10_000, total: 100_000 }
-					: d
-			)
-		};
-		const at = (minute: number) =>
-			buildCtx(big, { today: '2026-10-27', pollsClosed: false, minute }).current!.restVolume;
-		expect(at(19 * 60)).toBe(3000);
-		expect(at(20 * 60)).toBe(2000);
-		expect(at(21 * 60 - 1)).toBe(0);
+	describe('counties that have not reported today', () => {
+		const countyDay = (date: string, dad: number, lee: number) => ({
+			date,
+			rep: (dad + lee) / 2,
+			dem: (dad + lee) / 2,
+			npa: 0,
+			oth: 0,
+			total: dad + lee,
+			counties: [county('DAD', dad / 2, dad / 2), county('LEE', lee / 2, lee / 2)]
+		});
+		const weeks = (lee: (date: string) => number) =>
+			Array.from({ length: 13 }, (_, i) => {
+				const date = `2026-10-${19 + i}`;
+				return countyDay(date, 10_000, lee(date));
+			});
+		const usual = weeks((date) => (date === '2026-10-22' ? 4000 : 5000));
+
+		it('expects a county that reported on recent days but not yet today', () => {
+			const complete = usual.filter((d) => d.date < '2026-10-29');
+			expect(missingVolume(complete, countyDay('2026-10-29', 12_000, 0), '2026-10-29')).toBe(4000);
+			const ctx = buildCtx(
+				{ ...feed, earlyDays: [...complete, countyDay('2026-10-29', 12_000, 0)] },
+				{ today: '2026-10-29', pollsClosed: false, minute: 19 * 60 }
+			);
+			expect(ctx.current?.projectedVolume).toBe(16_000);
+			expect(ctx.current?.restVolume).toBe(4000);
+		});
+
+		it('does not expect a county that was closed on a recent day', () => {
+			const complete = weeks((date) => (date === '2026-10-27' ? 0 : 5000)).filter(
+				(d) => d.date < '2026-10-29'
+			);
+			expect(missingVolume(complete, countyDay('2026-10-29', 12_000, 0), '2026-10-29')).toBe(0);
+		});
+
+		it('only expects counties that open on the final Sunday', () => {
+			const complete = usual.filter((d) => d.date <= '2026-10-31');
+			expect(missingVolume(complete, null, '2026-11-01')).toBe(10_000 * FINAL_DAY_TURNOUT);
+			expect(
+				missingVolume(complete, countyDay('2026-11-01', 3000, 0), '2026-11-01')
+			).toBe(0);
+		});
 	});
 
 	it('moves the rest of today toward the count as more of the day is counted', () => {
