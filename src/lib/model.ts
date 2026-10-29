@@ -275,7 +275,7 @@ export const DEFAULT_TARGET = -8.5;
 
 export const ED_TURNOUT = 2_600_000;
 
-export const MODEL_VERSION = 7;
+export const MODEL_VERSION = 8;
 export const AUTO_IPEV_SWING = 0.25;
 export const AUTO_IPEV_LIMIT = 2;
 
@@ -368,14 +368,6 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	if (f.modelVersion === 6) {
-		const updated = reconcileForecast(ctx, {
-			...f,
-			modelVersion: MODEL_VERSION,
-			balance: 'adaptive'
-		});
-		return f.linked ? rebalanceForecast(ctx, updated) : updated;
-	}
 	return { ...defaultForecast(ctx), name: f.name };
 }
 

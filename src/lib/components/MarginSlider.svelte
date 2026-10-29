@@ -10,7 +10,8 @@
 		max = 20,
 		step = 0.1,
 		hint,
-		info
+		info,
+		disabled = false
 	}: {
 		value: number;
 		label: string;
@@ -19,6 +20,7 @@
 		step?: number;
 		hint?: Snippet;
 		info?: Snippet;
+		disabled?: boolean;
 	} = $props();
 
 	const id = $props.id();
@@ -41,6 +43,7 @@
 		{min}
 		{max}
 		{step}
+		{disabled}
 		bind:value
 		style:--zero="{zero}%"
 		aria-valuetext={fmtMargin(value)}
@@ -86,6 +89,11 @@
 		background: var(--ink);
 		border: 3px solid var(--surface);
 		box-shadow: 0 0 0 1px var(--axis);
+	}
+
+	input[type='range']:disabled {
+		cursor: default;
+		opacity: 0.45;
 	}
 
 	input[type='range']:focus-visible {
