@@ -2,6 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
 	import { updated } from '$app/state';
+	import logo from '#lib/assets/favicon.svg';
 	import EChart from '#lib/components/EChart.svelte';
 	import CountyMap from '#lib/components/CountyMap.svelte';
 	import MarginInput from '#lib/components/MarginInput.svelte';
@@ -341,8 +342,9 @@
 
 <main class="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 	<header class="page-header mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-		<h1 class="flex items-center text-lg font-semibold tracking-tight sm:text-xl">
-			Florida Vote Forecaster<span class="title-year">&nbsp;(2026)</span>
+		<h1 class="flex items-center gap-2.5 text-lg font-semibold tracking-tight sm:text-xl">
+			<img src={logo} alt="" class="logo" width="28" height="28" />
+			<span>Florida Vote Forecaster</span>
 		</h1>
 		<div class="mode-toggle" role="group" aria-label="View">
 			<button type="button" aria-pressed={!custom} onclick={() => (mode = 'projection')}
@@ -1163,6 +1165,15 @@
 		margin-left: auto;
 		justify-content: flex-end;
 	}
+	.logo {
+		flex: none;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0.2rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+	}
 	.header-btn .icon {
 		display: none;
 	}
@@ -1236,11 +1247,6 @@
 		}
 		.page-header > p {
 			order: 5;
-		}
-	}
-	@media (max-width: 399px) {
-		.title-year {
-			display: none;
 		}
 	}
 	@media (min-width: 1280px) {
