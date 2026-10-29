@@ -243,7 +243,11 @@ export function buildCtx(feed: FeedData, clock: FloridaClock): Ctx {
 }
 
 export function defaultDays(ctx: Ctx): ForecastDay[] {
-	return projectDays(ctx.complete, ctx.futureDates);
+	const days =
+		ctx.current?.pollsClosed && ctx.current.soFar
+			? [...ctx.complete, ctx.current.soFar]
+			: ctx.complete;
+	return projectDays(days, ctx.futureDates);
 }
 
 export function currentDayBenchmark(ctx: Ctx): ForecastDay | null {
@@ -271,24 +275,29 @@ export const DEFAULT_TARGET = -8.5;
 
 export const ED_TURNOUT = 2_600_000;
 
-export const MODEL_VERSION = 6;
+export const MODEL_VERSION = 7;
+export const AUTO_IPEV_SWING = 0.25;
+export const AUTO_IPEV_LIMIT = 2;
 
 export function defaultForecast(ctx: Ctx): Forecast {
-	const baseline = holdTarget(
+	return rebalanceForecast(
 		ctx,
 		reconcileForecast(ctx, {
 			modelVersion: MODEL_VERSION,
 			name: 'Default scenario',
-			target: BASELINE.target,
+			target: DEFAULT_TARGET,
 			edMargin: BASELINE.edMargin,
 			edTurnout: ED_TURNOUT,
 			mailFinal: defaultMailFinal(ctx.feed),
-			mailMargin: defaultMailMargin(ctx.feed, ctx.current?.date),
+			mailMargin: defaultMailMargin(
+				ctx.feed,
+				ctx.current?.pollsClosed ? undefined : ctx.current?.date
+			),
 			days: defaultDays(ctx),
-			linked: true
+			linked: true,
+			balance: 'adaptive'
 		})
 	);
-	return swingToTarget(ctx, baseline, DEFAULT_TARGET);
 }
 
 export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
@@ -359,6 +368,14 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
+	if (f.modelVersion === 6) {
+		const updated = reconcileForecast(ctx, {
+			...f,
+			modelVersion: MODEL_VERSION,
+			balance: 'adaptive'
+		});
+		return f.linked ? rebalanceForecast(ctx, updated) : updated;
+	}
 	return { ...defaultForecast(ctx), name: f.name };
 }
 
@@ -459,7 +476,8 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 			const margin = d.margin + shift;
 			return { ...d, margin, gap: (d.volume * margin) / 100 };
 		}),
-		todayBenchmark: plan ? plan.margin + (plan.swingable ? shift : 0) : null,
+		todayBenchmark:
+			plan && !current?.pollsClosed ? plan.margin + (plan.swingable ? shift : 0) : null,
 		scenarioIpevMargin: ipevVol ? (ipevGap / ipevVol) * 100 : 0,
 		cushion: gap - (f.target / 100) * total
 	};
@@ -475,13 +493,76 @@ export function shiftDays(ctx: Ctx, f: Forecast, delta: number): Forecast {
 }
 
 export function holdTarget(ctx: Ctx, f: Forecast): Forecast {
-	const o = computeOutcome(ctx, f);
-	if (o.swingVolume > 0) return shiftDays(ctx, f, o.shift);
-	if (f.edTurnout > 0) return { ...f, edMargin: f.edMargin - (o.cushion / f.edTurnout) * 100 };
-	return f;
+	let next = f;
+	for (let i = 0; i < 3; i++) {
+		const o = computeOutcome(ctx, next);
+		if (Math.abs(o.cushion) < 1e-7) break;
+		if (o.swingVolume > 0) next = shiftDays(ctx, next, o.shift);
+		else if (next.edTurnout > 0)
+			next = { ...next, edMargin: next.edMargin - (o.cushion * 100) / next.edTurnout };
+		else break;
+	}
+	return next;
+}
+
+export function rebalanceForecast(ctx: Ctx, f: Forecast): Forecast {
+	if (f.balance === 'ed') return setEdHoldingTarget(ctx, f, f.edMargin);
+	const solveEd = (next: Forecast): Forecast => ({
+		...next,
+		edMargin:
+			next.edTurnout > 0
+				? clamp(
+						next.edMargin - (computeOutcome(ctx, next).cushion * 100) / next.edTurnout,
+						ED_RANGE
+					)
+				: next.edMargin
+	});
+	if (f.balance === 'ipev') return solveEd(f);
+	const shape = defaultDays(ctx);
+	const boundDay = (day: ForecastDay, base: number): ForecastDay => ({
+		...day,
+		margin: Math.max(base - AUTO_IPEV_LIMIT, Math.min(base + AUTO_IPEV_LIMIT, day.margin))
+	});
+	const bound = (next: Forecast): Forecast => ({
+		...next,
+		days: next.days.map((d) =>
+			boundDay(d, shape.find((b) => b.date === d.date)?.margin ?? d.margin)
+		),
+		today:
+			next.today && ctx.current && !ctx.current.pollsClosed
+				? boundDay(next.today, currentDayBenchmark(ctx)?.margin ?? next.today.margin)
+				: next.today
+	});
+	const bounded = bound(f);
+	const outcome = computeOutcome(ctx, bounded);
+	if (Math.abs(outcome.cushion) < 0.5) return bounded;
+	const volume = bounded.edTurnout + AUTO_IPEV_SWING * outcome.swingVolume;
+	if (!volume) {
+		const remaining = mailRemaining(ctx, bounded);
+		return remaining > 0
+			? {
+					...bounded,
+					mailMargin: clamp(bounded.mailMargin - (outcome.cushion * 100) / remaining, {
+						min: -100,
+						max: 100
+					})
+				}
+			: bounded;
+	}
+	const delta = (-outcome.cushion * 100) / volume;
+	return solveEd(
+		bound(
+			shiftDays(
+				ctx,
+				{ ...bounded, edMargin: clamp(bounded.edMargin + delta, ED_RANGE) },
+				AUTO_IPEV_SWING * delta
+			)
+		)
+	);
 }
 
 export function swingToTarget(ctx: Ctx, f: Forecast, target: number): Forecast {
+	if (!f.balance || f.balance === 'adaptive') return rebalanceForecast(ctx, { ...f, target });
 	const base = holdTarget(ctx, f);
 	const o = computeOutcome(ctx, base);
 	const swingable = o.swingVolume + base.edTurnout + MAIL_SWING * mailRemaining(ctx, base);
@@ -506,6 +587,7 @@ const clamp = (v: number, range: { min: number; max: number }) =>
 	Math.min(range.max, Math.max(range.min, v));
 
 export function setIpevHoldingTarget(ctx: Ctx, f: Forecast, ipevMargin: number): Forecast {
+	f = { ...f, balance: 'ipev' };
 	const o = computeOutcome(ctx, f);
 	const moved = shiftDays(ctx, f, clamp(ipevMargin, IPEV_RANGE) - o.scenarioIpevMargin);
 	if (!f.edTurnout) return moved;
@@ -517,6 +599,7 @@ export function setIpevHoldingTarget(ctx: Ctx, f: Forecast, ipevMargin: number):
 }
 
 export function setEdHoldingTarget(ctx: Ctx, f: Forecast, edMargin: number): Forecast {
+	f = { ...f, balance: 'ed' };
 	const held = holdTarget(ctx, { ...f, edMargin: clamp(edMargin, ED_RANGE) });
 	const o = computeOutcome(ctx, held);
 	if (!o.ipevRemainingVolume) return held;

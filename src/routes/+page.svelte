@@ -20,11 +20,11 @@
 		fmtInt,
 		fmtLead,
 		fmtMargin,
-		holdTarget,
 		IPEV_RANGE,
 		mailRemaining,
 		marginOf,
 		projectPath,
+		rebalanceForecast,
 		reconcileForecast,
 		REGISTRATION,
 		setEdHoldingTarget,
@@ -189,8 +189,13 @@
 	});
 
 	$effect(() => {
-		if (forecast.linked && Math.abs(outcome.cushion) > 0.5) {
-			untrack(() => (forecast = holdTarget(ctx, $state.snapshot(forecast))));
+		const context = ctx;
+		if (forecast.linked && (forecast.balance === 'adaptive' || Math.abs(outcome.cushion) > 0.5)) {
+			untrack(() => {
+				const current = $state.snapshot(forecast);
+				const next = rebalanceForecast(context, current);
+				if (JSON.stringify(next) !== JSON.stringify(current)) forecast = next;
+			});
 		}
 	});
 
@@ -232,6 +237,7 @@
 		const defaults = defaultForecast(ctx);
 		forecast.days = defaults.days;
 		forecast.today = defaults.today;
+		forecast.balance = 'adaptive';
 	}
 
 	function resetAll() {
@@ -427,9 +433,10 @@
 						Lock to target
 					</label>
 					<Info align="right">
-						When on, the final always equals your target. Moving the target shifts the margins for
-						Election Day, remaining IPEV, and remaining mail by the same amount. Moving Election Day
-						or IPEV alone re-solves the other.
+						Automatic forecasts keep early-vote margins near recent reports and adjust Election Day
+						more to reach your target. Setting Election Day or IPEV yourself holds that input and
+						re-solves the other. If the allowed ranges cannot reach the target, the remaining gap is
+						shown.
 					</Info>
 				</span>
 			</div>
@@ -454,7 +461,8 @@
 			>
 				{#snippet info()}
 					Party margin of Election Day voters. Turnout ({fmtInt(forecast.edTurnout)}) is under
-					Advanced.
+					Advanced. In automatic mode this is the margin required to reach your target, not an
+					independent prediction of Election Day voting.
 				{/snippet}
 			</MarginSlider>
 
@@ -484,8 +492,10 @@
 					</span>
 				</div>
 				<div class="text-2 mt-0.5">
-					{#if forecast.linked}
+					{#if forecast.linked && Math.abs(outcome.cushion) <= 0.5}
 						On target
+					{:else if forecast.linked}
+						Target is outside the current limits by <b>{fmtInt(Math.abs(outcome.cushion))}</b> votes
 					{:else if outcome.cushion >= 0}
 						Beats {fmtMargin(forecast.target)} by <b>{fmtInt(outcome.cushion)}</b> votes
 					{:else}
@@ -535,14 +545,14 @@
 
 				{#if today}
 					<div class="text-2 mt-4 mb-1 flex items-center text-sm">
-						Today (locked)
+						Today ({today.pollsClosed ? 'reported' : 'locked'})
 						<Info align="left">
-							Needed full day: {fmtInt(today.projectedVolume)} at {fmtMargin(
-								plan?.projectedMargin ?? today.projectedMargin
-							)}, so {fmtInt(today.restVolume)} more expected. Today's margin moves with the upcoming
-							days when the target or days change. {today.pollsClosed
-								? 'Polls have closed, so nothing more is projected, but late uploads still count.'
-								: ''} Becomes reported data after midnight.
+							{#if today.pollsClosed}Polls have closed. This day shows reported counts; late uploads
+								still count.
+							{:else}Needed full day: {fmtInt(today.projectedVolume)} at {fmtMargin(
+									plan?.projectedMargin ?? today.projectedMargin
+								)}, so {fmtInt(today.restVolume)} more expected. Today's margin moves with the upcoming
+								days when the target or days change.{/if} Becomes reported data after midnight.
 						</Info>
 					</div>
 					<p class="text-muted text-xs">
@@ -581,11 +591,27 @@
 												step="5000"
 												min="0"
 												aria-label="{fmtDay(d.date)} votes"
-												bind:value={d.volume}
+												bind:value={
+													() => d.volume,
+													(v) => {
+														d.volume = v;
+														forecast.balance = 'ipev';
+													}
+												}
 											/>
 										</td>
 										<td class="py-0.5">
-											<MarginInput label={fmtDay(d.date)} bind:value={d.margin} compact />
+											<MarginInput
+												label={fmtDay(d.date)}
+												bind:value={
+													() => d.margin,
+													(v) => {
+														d.margin = v;
+														forecast.balance = 'ipev';
+													}
+												}
+												compact
+											/>
 										</td>
 									</tr>
 								{/each}
@@ -995,8 +1021,9 @@
 					</table>
 				</div>
 				<p class="text-muted mt-3 pb-1 text-xs">
-					Shaded rows include projections. Today's needed margin is weighted with the upcoming days,
-					the same as in the cards.
+					Shaded rows include projections. Completed days show reported results. Automatic
+					early-vote projections stay near recent trends; Election Day absorbs most of the
+					adjustment to your target.
 				</p>
 			</section>
 

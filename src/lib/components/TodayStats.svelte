@@ -34,7 +34,11 @@
 			voters, including NPA and other registrations. Counts may still update.</Info
 		>
 	</div>
-	<div class="stats-grid grid grid-cols-2 gap-3 lg:grid-cols-5">
+	<div
+		class="stats-grid grid grid-cols-2 gap-3 {today.pollsClosed
+			? 'lg:grid-cols-4'
+			: 'lg:grid-cols-5'}"
+	>
 		<div class="card p-4">
 			<div class="text-muted text-xs font-medium uppercase">Today's margin</div>
 			<div class="num mt-1 text-2xl font-semibold {color(margin ?? 0)}">
@@ -44,29 +48,29 @@
 				{counted?.total ? 'In-person voters today' : 'Awaiting votes'}
 			</div>
 		</div>
-		<div class="card p-4">
-			<div class="text-muted flex items-center text-xs font-medium uppercase">
-				Vs. today's forecast<Info align="left"
-					>Compares today's actual margin with the margin today needs in your forecast, the same
-					figure shown in the table. Today is weighted with the upcoming days, so it moves when the
-					target or those days change, but not with today's own counts. A positive difference favors
-					Democrats; a negative difference favors Republicans.</Info
-				>
-			</div>
-			<div class="num mt-1 text-2xl font-semibold {color(delta ?? 0)}">
-				{delta === null ? '-' : `${delta > 0 ? '+' : ''}${delta.toFixed(2)} pts`}
-			</div>
-			<div class="text-2 mt-1 text-xs">
-				{delta === null
-					? 'Awaiting votes'
-					: Math.abs(delta) < 0.005
-						? 'On benchmark'
-						: `${delta > 0 ? 'D' : 'R'} ahead of benchmark`}
-			</div>
-			{#if benchmark}<div class="text-muted mt-1 text-xs">
-					Needed {fmtMargin(benchmark.margin, 2)}
-				</div>{/if}
-		</div>
+		{#if !today.pollsClosed}<div class="card p-4">
+				<div class="text-muted flex items-center text-xs font-medium uppercase">
+					Vs. today's forecast<Info align="left"
+						>Compares today's actual margin with the margin today needs in your forecast, the same
+						figure shown in the table. Automatic EV adjustments stay near recent trends, with most
+						of the adjustment assigned to Election Day. A positive difference favors Democrats; a
+						negative difference favors Republicans.</Info
+					>
+				</div>
+				<div class="num mt-1 text-2xl font-semibold {color(delta ?? 0)}">
+					{delta === null ? '-' : `${delta > 0 ? '+' : ''}${delta.toFixed(2)} pts`}
+				</div>
+				<div class="text-2 mt-1 text-xs">
+					{delta === null
+						? 'Awaiting votes'
+						: Math.abs(delta) < 0.005
+							? 'On benchmark'
+							: `${delta > 0 ? 'D' : 'R'} ahead of benchmark`}
+				</div>
+				{#if benchmark}<div class="text-muted mt-1 text-xs">
+						Needed {fmtMargin(benchmark.margin, 2)}
+					</div>{/if}
+			</div>{/if}
 		<div class="card p-4">
 			<div class="text-muted text-xs font-medium uppercase">Votes today</div>
 			<div class="num mt-1 text-2xl font-semibold">{fmtInt(counted?.total ?? 0)}</div>
