@@ -218,6 +218,25 @@ input:focus-visible + .switch {
 		flex-wrap: wrap;
 	}
 
+	.forecast-controls > .edit-toggle {
+		margin-left: auto;
+		min-width: 5.5rem;
+	}
+
+	.forecast-controls > .edit-toggle + span {
+		flex-basis: 100%;
+	}
+
+	.btn:disabled,
+	.field:disabled {
+		cursor: default;
+		opacity: 0.5;
+	}
+
+	input:disabled + .switch {
+		opacity: 0.5;
+	}
+
 	.btn,
 	.field {
 		min-height: 44px;

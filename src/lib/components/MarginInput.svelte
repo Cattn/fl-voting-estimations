@@ -3,8 +3,15 @@
 		value = $bindable(),
 		label,
 		step = 0.1,
-		compact = false
-	}: { value: number; label: string; step?: number; compact?: boolean } = $props();
+		compact = false,
+		disabled = false
+	}: {
+		value: number;
+		label: string;
+		step?: number;
+		compact?: boolean;
+		disabled?: boolean;
+	} = $props();
 
 	const party = $derived(value > 0 ? 'D' : 'R');
 	const magnitude = $derived(Math.round(Math.abs(value) * 100) / 100);
@@ -23,6 +30,7 @@
 			class="text-rep"
 			class:on={party === 'R'}
 			aria-pressed={party === 'R'}
+			{disabled}
 			onclick={() => setParty('R')}>R+</button
 		>
 		<button
@@ -30,6 +38,7 @@
 			class="text-dem"
 			class:on={party === 'D'}
 			aria-pressed={party === 'D'}
+			{disabled}
 			onclick={() => setParty('D')}>D+</button
 		>
 	</div>
@@ -40,6 +49,7 @@
 		type="number"
 		min="0"
 		{step}
+		{disabled}
 		aria-label="{label} margin"
 		value={magnitude}
 		oninput={(e) => setMagnitude(e.currentTarget.valueAsNumber)}
@@ -65,6 +75,14 @@
 	.toggle button.on {
 		opacity: 1;
 		background: var(--wash);
+	}
+
+	.toggle button:disabled {
+		cursor: default;
+	}
+
+	.toggle button.on:disabled {
+		opacity: 0.5;
 	}
 
 	@media (max-width: 767px) {

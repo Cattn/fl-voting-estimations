@@ -48,6 +48,9 @@
 	let refreshing = $state(false);
 	let copied = $state(false);
 	let mounted = $state(false);
+	let mobile = $state(false);
+	let editing = $state(false);
+	const locked = $derived(mobile && !editing);
 
 	const today = $derived(ctx.current);
 	const reportedMail = $derived(
@@ -154,6 +157,14 @@
 	);
 
 	const pathOffset = $derived(today ? 1 : 0);
+
+	onMount(() => {
+		const media = matchMedia('(max-width: 767px)');
+		const updateMobile = () => (mobile = media.matches);
+		updateMobile();
+		media.addEventListener('change', updateMobile);
+		return () => media.removeEventListener('change', updateMobile);
+	});
 
 	onMount(() => {
 		theme.init();
@@ -426,9 +437,21 @@
 		<aside class="card h-fit p-4 lg:sticky lg:top-4" aria-label="Forecast inputs">
 			<div class="forecast-controls mb-4 flex items-center justify-between gap-2">
 				<h2 class="text-base font-semibold">Make a forecast</h2>
+				<button
+					type="button"
+					class="edit-toggle btn md:hidden"
+					class:btn-primary={!editing}
+					aria-pressed={editing}
+					onclick={() => (editing = !editing)}>{editing ? 'Done' : 'Edit'}</button
+				>
 				<span class="inline-flex items-center">
 					<label class="text-2 flex cursor-pointer items-center gap-2 text-sm">
-						<input type="checkbox" class="peer sr-only" bind:checked={forecast.linked} />
+						<input
+							type="checkbox"
+							class="peer sr-only"
+							disabled={locked}
+							bind:checked={forecast.linked}
+						/>
 						<span class="switch" aria-hidden="true"></span>
 						Lock to target
 					</label>
@@ -440,10 +463,16 @@
 					</Info>
 				</span>
 			</div>
+			{#if locked}
+				<p class="text-muted -mt-2 mb-4 text-xs md:hidden" role="status">
+					Inputs are locked so scrolling can't change them. Tap Edit to make changes.
+				</p>
+			{/if}
 
 			<MarginSlider
 				label="Target final electorate"
 				bind:value={() => forecast.target, setTarget}
+				disabled={locked}
 				min={-15}
 				max={5}
 			>
@@ -456,6 +485,7 @@
 			<MarginSlider
 				label="Election Day margin"
 				bind:value={() => forecast.edMargin, setEdMargin}
+				disabled={locked}
 				min={ED_RANGE.min}
 				max={ED_RANGE.max}
 			>
@@ -470,6 +500,7 @@
 				<MarginSlider
 					label="Remaining IPEV margin"
 					bind:value={() => outcome.scenarioIpevMargin, setIpevMargin}
+					disabled={locked}
 					min={IPEV_RANGE.min}
 					max={IPEV_RANGE.max}
 				>
@@ -515,6 +546,7 @@
 							type="number"
 							step="50000"
 							min="0"
+							disabled={locked}
 							bind:value={forecast.edTurnout}
 						/>
 					</label>
@@ -526,12 +558,17 @@
 							type="number"
 							step="10000"
 							min="0"
+							disabled={locked}
 							bind:value={forecast.mailFinal}
 						/>
 					</label>
 					<label>
 						<span class="text-2 mb-1 block">Margin of the rest</span>
-						<MarginInput label="Remaining mail" bind:value={forecast.mailMargin} />
+						<MarginInput
+							label="Remaining mail"
+							disabled={locked}
+							bind:value={forecast.mailMargin}
+						/>
 					</label>
 				</div>
 				<p class="text-muted mt-1 inline-flex items-center text-xs">
@@ -590,6 +627,7 @@
 												type="number"
 												step="5000"
 												min="0"
+												disabled={locked}
 												aria-label="{fmtDay(d.date)} votes"
 												bind:value={
 													() => d.volume,
@@ -603,6 +641,7 @@
 										<td class="py-0.5">
 											<MarginInput
 												label={fmtDay(d.date)}
+												disabled={locked}
 												bind:value={
 													() => d.margin,
 													(v) => {
@@ -618,7 +657,7 @@
 							</tbody>
 						</table>
 					</div>
-					<button class="btn mt-2" onclick={resetDays}>Reset days</button>
+					<button class="btn mt-2" disabled={locked} onclick={resetDays}>Reset days</button>
 				{/if}
 			</details>
 
@@ -627,15 +666,17 @@
 					<input
 						class="field min-w-0 flex-1 text-sm"
 						aria-label="Forecast name"
+						disabled={locked}
 						bind:value={forecast.name}
 					/>
-					<button class="btn btn-primary" onclick={save}>Save</button>
+					<button class="btn btn-primary" disabled={locked} onclick={save}>Save</button>
 				</div>
 				<div class="forecast-actions mt-2 flex flex-wrap gap-2">
 					{#if saved.length}
 						<select
 							class="field min-w-0 flex-1 text-sm"
 							aria-label="Load a saved forecast"
+							disabled={locked}
 							value=""
 							onchange={(e) => {
 								const s = saved.find((x) => x.name === e.currentTarget.value);
@@ -649,11 +690,13 @@
 							{/each}
 						</select>
 						{#if saved.some((s) => s.name === forecast.name)}
-							<button class="btn" onclick={() => remove(forecast.name)}>Delete</button>
+							<button class="btn" disabled={locked} onclick={() => remove(forecast.name)}
+								>Delete</button
+							>
 						{/if}
 					{/if}
 					<button class="btn" onclick={share}>{copied ? 'Link copied' : 'Share link'}</button>
-					<button class="btn" onclick={resetAll}>Reset</button>
+					<button class="btn" disabled={locked} onclick={resetAll}>Reset</button>
 				</div>
 			</div>
 		</aside>

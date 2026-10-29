@@ -155,25 +155,6 @@ describe('automatic EV and ED balance', () => {
 			).toBeLessThanOrEqual(AUTO_IPEV_LIMIT + 1e-9);
 		expect(rebalanceForecast(ctx, next)).toEqual(next);
 	});
-	it('upgrades version 6 without losing targets or custom turnout, and preserves unlocked scenarios', () => {
-		const { ctx, forecast } = start();
-		const saved = {
-			...forecast,
-			name: 'My scenario',
-			modelVersion: 6,
-			target: -9,
-			days: forecast.days.map((d) => ({ ...d, margin: -28 }))
-		};
-		const next = upgradeForecast(ctx, saved);
-		expect(next.name).toBe(saved.name);
-		expect(next.target).toBe(saved.target);
-		expect(next.edTurnout).toBe(saved.edTurnout);
-		expect(next.modelVersion).toBe(MODEL_VERSION);
-		expect(computeOutcome(ctx, next).margin).toBeCloseTo(-9, 6);
-		const unlocked = upgradeForecast(ctx, { ...saved, linked: false });
-		expect(unlocked.days).toEqual(saved.days);
-		expect(unlocked.edMargin).toBe(saved.edMargin);
-	});
 });
 
 const countyFeed = () => {
@@ -426,7 +407,9 @@ describe('locked sliders', () => {
 		expect(defaults.edTurnout).toBe(ED_TURNOUT);
 		const old = [
 			{ ...defaults, modelVersion: undefined, name: 'Mine', target: -6, edMargin: -41.9 },
-			{ ...defaults, modelVersion: 5, name: 'Mine', linked: false, edTurnout: 3_000_000 }
+			{ ...defaults, modelVersion: 5, name: 'Mine', linked: false, edTurnout: 3_000_000 },
+			{ ...defaults, modelVersion: 6, name: 'Mine', target: -9 },
+			{ ...defaults, modelVersion: MODEL_VERSION - 1, name: 'Mine', linked: false, edMargin: -30 }
 		];
 		for (const f of old) expect(upgradeForecast(ctx, f)).toEqual({ ...defaults, name: 'Mine' });
 		const current = { ...defaults, target: -6 };
