@@ -24,7 +24,9 @@ import {
 	ED_TURNOUT,
 	IPEV_RANGE,
 	AUTO_IPEV_SWING,
-	AUTO_IPEV_LIMIT
+	AUTO_IPEV_LIMIT,
+	WEEKEND_CARRY,
+	FINAL_DAY_TURNOUT
 } from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -356,9 +358,30 @@ describe('day status', () => {
 	it('projects the final Sunday from the counties open that day', () => {
 		const ctx = buildCtx(countyFeed(), open('2026-10-28'));
 		const days = defaultDays(ctx);
-		expect(days.find((d) => d.date === '2026-11-01')?.margin).toBe(30);
+		expect(days.find((d) => d.date === '2026-11-01')?.margin).toBe(20 + WEEKEND_CARRY * 10);
 		expect(days.find((d) => d.date === '2026-10-30')?.margin).toBe(-10);
 		expect(days.find((d) => d.date === '2026-10-31')?.margin).toBe(-10);
+	});
+
+	it('does not count counties that opened later as turnout growth', () => {
+		const earlyDays = ['19', '20', '21', '22', '23', '24', '25', '26', '27', '28'].map((dd) => {
+			const lee = Number(dd) >= 24 ? 10000 : 0;
+			const counties = [county('DAD', 10000, 10000), county('LEE', lee, lee)];
+			return {
+				date: `2026-10-${dd}`,
+				rep: 10000 + lee,
+				dem: 10000 + lee,
+				npa: 0,
+				oth: 0,
+				total: 20000 + 2 * lee,
+				counties
+			};
+		});
+		const ctx = buildCtx({ ...extractFeed(html), earlyDays }, open('2026-10-29'));
+		const days = defaultDays(ctx);
+		expect(days.find((d) => d.date === '2026-10-30')?.volume).toBe(40000);
+		expect(days.find((d) => d.date === '2026-10-31')?.volume).toBe(40000);
+		expect(days.find((d) => d.date === '2026-11-01')?.volume).toBe(20000 * FINAL_DAY_TURNOUT);
 	});
 
 	it('has nothing left to edit once early voting is over', () => {
@@ -402,21 +425,47 @@ describe('forecast', () => {
 describe('locked sliders', () => {
 	const ctx = buildCtx(extractFeed(html), open('2026-10-28'));
 
-	it('resets every forecast from an older version to the default once', () => {
+	it('resets every forecast from before version 8 to the default once', () => {
 		const defaults = defaultForecast(ctx);
 		expect(defaults.edTurnout).toBe(ED_TURNOUT);
 		const old = [
 			{ ...defaults, modelVersion: undefined, name: 'Mine', target: -6, edMargin: -41.9 },
 			{ ...defaults, modelVersion: 5, name: 'Mine', linked: false, edTurnout: 3_000_000 },
 			{ ...defaults, modelVersion: 6, name: 'Mine', target: -9 },
-			{ ...defaults, modelVersion: MODEL_VERSION - 1, name: 'Mine', linked: false, edMargin: -30 }
+			{ ...defaults, modelVersion: 7, name: 'Mine', linked: false, edMargin: -30 }
 		];
 		for (const f of old) expect(upgradeForecast(ctx, f)).toEqual({ ...defaults, name: 'Mine' });
 		const current = { ...defaults, target: -6 };
 		expect(upgradeForecast(ctx, current)).toBe(current);
 	});
 
-	it('bases remaining mail on the last seven complete days', () => {
+	it('refreshes version 8 projections while keeping the chosen target and turnout', () => {
+		const defaults = defaultForecast(ctx);
+		const stale = {
+			...defaults,
+			modelVersion: 8,
+			name: 'Mine',
+			target: -10,
+			edTurnout: 3_000_000,
+			mailMargin: 20,
+			days: defaults.days.map((d) => ({ ...d, volume: d.volume * 2, margin: d.margin + 5 }))
+		};
+		const linked = upgradeForecast(ctx, stale);
+		expect(linked).toMatchObject({
+			modelVersion: MODEL_VERSION,
+			name: 'Mine',
+			target: -10,
+			edTurnout: 3_000_000,
+			mailMargin: defaults.mailMargin
+		});
+		expect(linked.days.map((d) => d.volume)).toEqual(defaultDays(ctx).map((d) => d.volume));
+		expect(computeOutcome(ctx, linked).margin).toBeCloseTo(-10, 6);
+		const unlinked = upgradeForecast(ctx, { ...stale, linked: false, edMargin: -30 });
+		expect(unlinked.edMargin).toBe(-30);
+		expect(unlinked.days).toEqual(defaultDays(ctx));
+	});
+
+	it('applies each party recent return rate to its outstanding ballots', () => {
 		const mail = (date: string, rep: number, dem: number) => ({
 			date,
 			rep,
@@ -429,11 +478,12 @@ describe('locked sliders', () => {
 			...extractFeed(html),
 			mailDays: [
 				mail('2026-10-20', 0, 1000),
-				...['21', '22', '23', '24', '25', '26', '27'].map((dd) => mail(`2026-10-${dd}`, 450, 550)),
+				...['21', '22', '23', '24', '25', '26', '27'].map((dd) => mail(`2026-10-${dd}`, 400, 600)),
 				mail('2026-10-28', 1000, 0)
-			]
+			],
+			outstanding: { rep: 4200, dem: 3800, npa: 0, oth: 0, total: 8000 }
 		};
-		expect(defaultMailMargin(feed, '2026-10-28')).toBe(10);
+		expect(defaultMailMargin(feed, '2026-10-28')).toBe(15.2);
 	});
 
 	it('reaches the R+8.5 default while keeping EV close to the observed day profile', () => {

@@ -162,13 +162,22 @@ export const FINAL_DAY_COUNTIES = new Set([
 	'TAY'
 ]);
 
+export const FINAL_DAY_TURNOUT = 0.85;
+export const WEEKEND_CARRY = 0.75;
+
 function finalDayCounties(days: DayCounts[]): DayCounts[] | null {
 	if (!days.every((d) => d.counties?.length)) return null;
-	return days.map((d) => ({
-		date: d.date,
-		...sum((d.counties ?? []).filter((c) => FINAL_DAY_COUNTIES.has(c.code)))
-	}));
+	return days.map((d) => {
+		const counties = (d.counties ?? []).filter((c) => FINAL_DAY_COUNTIES.has(c.code));
+		return { date: d.date, ...sum(counties), counties };
+	});
 }
+
+const openOn = (day: DayCounts, ref: DayCounts): PartyCounts => {
+	if (!day.counties?.length || !ref.counties?.length) return day;
+	const open = new Set(ref.counties.filter((c) => c.total > 0).map((c) => c.code));
+	return sum(day.counties.filter((c) => open.has(c.code)));
+};
 
 function dayMargin(days: DayCounts[], date: string): number {
 	const weekdays = days.filter((d) => !isWeekend(d.date));
@@ -178,27 +187,40 @@ function dayMargin(days: DayCounts[], date: string): number {
 	const priorWeekdays = days.filter(
 		(d) => !isWeekend(d.date) && d.date < prev.date && d.date >= addDays(prev.date, -6)
 	);
-	return priorWeekdays.length ? baseline + (marginOf(prev) - weighted(priorWeekdays)) : baseline;
+	return priorWeekdays.length
+		? baseline + WEEKEND_CARRY * (marginOf(prev) - weighted(priorWeekdays))
+		: baseline;
+}
+
+function dayVolume(days: DayCounts[], date: string): number {
+	const find = (d: string) => days.find((x) => x.date === d);
+	const recent = days.slice(-3);
+	const prev = find(addDays(date, -7));
+	if (!prev) return sum(recent).total / recent.length;
+	const pairs = recent
+		.map((d) => [d, find(addDays(d.date, -7))] as const)
+		.filter((p): p is readonly [DayCounts, DayCounts] => !!p[1]);
+	const growth = pairs.length
+		? sum(pairs.map(([d, ref]) => openOn(d, ref))).total /
+			Math.max(1, sum(pairs.map((p) => p[1])).total)
+		: 1;
+	const closed = new Set(prev.counties?.filter((c) => c.total === 0).map((c) => c.code));
+	const missing = recent.reduce(
+		(a, d) => a + sum(d.counties?.filter((c) => closed.has(c.code)) ?? []).total,
+		0
+	);
+	return prev.total * growth + missing / recent.length;
 }
 
 function projectDays(days: DayCounts[], dates: string[], finalDayOnly = true): ForecastDay[] {
 	if (!days.length) return dates.map((date) => ({ date, volume: 0, margin: 0 }));
-	const find = (date: string) => days.find((d) => d.date === date);
 	const finalDays = finalDayOnly ? finalDayCounties(days) : null;
 
-	const pairs = days
-		.slice(-3)
-		.map((d) => [d, find(addDays(d.date, -7))] as const)
-		.filter((p): p is readonly [DayCounts, DayCounts] => !!p[1]);
-	const growth = pairs.length
-		? sum(pairs.map((p) => p[0])).total / Math.max(1, sum(pairs.map((p) => p[1])).total)
-		: 1;
-	const avgRecentVolume = sum(days.slice(-3)).total / Math.min(3, days.length);
-
 	return dates.map((date) => {
-		const prev = find(addDays(date, -7));
-		const volume = Math.round((prev ? prev.total * growth : avgRecentVolume) / 1000) * 1000;
-		const margin = dayMargin(date === EV_END && finalDays ? finalDays : days, date);
+		const source = date === EV_END && finalDays ? finalDays : days;
+		const scale = source === days ? 1 : FINAL_DAY_TURNOUT;
+		const volume = Math.round((dayVolume(source, date) * scale) / 1000) * 1000;
+		const margin = dayMargin(source, date);
 		return { date, volume, margin: Math.round(margin * 10) / 10 };
 	});
 }
@@ -258,8 +280,19 @@ export function currentDayBenchmark(ctx: Ctx): ForecastDay | null {
 export const MAIL_SWING = 0.25;
 
 export function defaultMailMargin(feed: FeedData, before?: string): number {
-	const days = feed.mailDays.filter((d) => !before || d.date < before);
-	return Math.round(weighted(days.slice(-7)) * 10) / 10;
+	const days = feed.mailDays.filter((d) => !before || d.date < before).slice(-7);
+	const returned = sum(days);
+	const since = sum(feed.mailDays.filter((d) => days.length && d.date > days.at(-1)!.date));
+	const expected = (['rep', 'dem', 'npa', 'oth'] as const).reduce(
+		(a, p) => {
+			const pool = feed.outstanding[p] + returned[p] + since[p];
+			return { ...a, [p]: pool ? (feed.outstanding[p] * returned[p]) / pool : 0 };
+		},
+		{ rep: 0, dem: 0, npa: 0, oth: 0 }
+	);
+	const total = expected.rep + expected.dem + expected.npa + expected.oth;
+	const margin = total ? marginOf({ ...expected, total }) : weighted(days);
+	return Math.round(margin * 10) / 10;
 }
 
 export function defaultMailFinal(feed: FeedData): number {
@@ -275,9 +308,9 @@ export const DEFAULT_TARGET = -8.5;
 
 export const ED_TURNOUT = 2_600_000;
 
-export const MODEL_VERSION = 8;
+export const MODEL_VERSION = 9;
 export const AUTO_IPEV_SWING = 0.25;
-export const AUTO_IPEV_LIMIT = 2;
+export const AUTO_IPEV_LIMIT = 3;
 
 export function defaultForecast(ctx: Ctx): Forecast {
 	return rebalanceForecast(
@@ -368,7 +401,16 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	return { ...defaultForecast(ctx), name: f.name };
+	if (f.modelVersion !== 8) return { ...defaultForecast(ctx), name: f.name };
+	const fresh = defaultForecast(ctx);
+	const updated = reconcileForecast(ctx, {
+		...f,
+		modelVersion: MODEL_VERSION,
+		mailMargin: fresh.mailMargin,
+		days: defaultDays(ctx),
+		today: undefined
+	});
+	return f.linked ? rebalanceForecast(ctx, updated) : updated;
 }
 
 export interface Component {
