@@ -3,6 +3,14 @@
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat"],
+	"kv_namespaces": [{ "binding": "FEED_CACHE", "id": "4c94b4d74f484d1497e5332979cabb81" }],
+	"d1_databases": [
+		{
+			"binding": "ELECTION_HISTORY",
+			"database_name": "fl-ev-history",
+			"database_id": "f0d87ca0-be5c-425c-a97a-b2347e87c849"
+		}
+	],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"

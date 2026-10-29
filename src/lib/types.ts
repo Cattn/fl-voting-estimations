@@ -12,6 +12,10 @@ export interface County {
 	registered: number;
 	mail: PartyCounts;
 	early: PartyCounts;
+	eday?: PartyCounts;
+	updated?: string;
+	edayUpdated?: string;
+	status?: string;
 }
 
 export interface CountyDayCounts extends PartyCounts {
@@ -34,6 +38,7 @@ export interface FeedData {
 	registered: number;
 	mail: PartyCounts;
 	early: PartyCounts;
+	eday?: PartyCounts;
 	outstanding: PartyCounts;
 	counties: County[];
 	earlyDays: DayCounts[];

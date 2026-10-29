@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot } from '../../src/lib/server/store.ts';
+import { toCrossJSON } from 'seroval';
+import fixture from '../fixtures/feed.json';
 
 const page = `<script>$R[3]={fetchedAt:"2026-10-28T00:00:00Z",fromCache:!1,windowOpen:!0,counties:[],
 mail:{rep:300,dem:500,npa:200,oth:0,total:1000},early:{rep:1100,dem:700,npa:200,oth:0,total:2000},
@@ -88,6 +90,39 @@ describe('today mail retention', () => {
 });
 
 describe('getFeed', () => {
+	it('normalizes server-function data with county Election Day fields and partial metadata', async () => {
+		const id = 'b'.repeat(64);
+		const raw = {
+			...fixture,
+			partial: true,
+			received: 64,
+			counties: fixture.counties.map((c) => ({
+				...c,
+				status: 'live',
+				updated: fixture.fetchedAt,
+				eday: { rep: 10, dem: 5, npa: 3, oth: 1, total: 19 }
+			}))
+		};
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(new Response('<script src="/assets/current.js"></script>'))
+				.mockResolvedValueOnce(
+					new Response(
+						'var XY=fn({method:`GET`}).handler(server(`' + id + '`));await XY({data:{force:false}})'
+					)
+				)
+				.mockResolvedValueOnce(Response.json(toCrossJSON({ result: raw }, { refs: new Map() })))
+		);
+		const { feed } = await load();
+		const data = await feed.fetchWithRetry();
+		expect(data.partial).toBe(true);
+		expect(data.received).toBe(64);
+		expect(data.counties[0].eday).toEqual(raw.counties[0].eday);
+		expect(data.counties[0].updated).toBe(fixture.fetchedAt);
+		expect(data.counties[0].status).toBe('live');
+	});
 	it('returns the saved snapshot immediately when the source hangs', async () => {
 		store.snapshot = old();
 		const hanging = vi.fn(

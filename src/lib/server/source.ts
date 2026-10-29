@@ -1,5 +1,6 @@
 import { fromCrossJSON } from 'seroval';
 import { parseLiteral } from './literal.ts';
+import { responseText } from './http.ts';
 
 export const SOURCE_URL = 'https://acorn-maple-earth-lake.grok.me/';
 
@@ -9,12 +10,12 @@ export async function fetchSource(signal: AbortSignal): Promise<Record<string, u
 		if (!response.ok) throw new Error(`Source responded ${response.status}`);
 		return response;
 	};
-	const html = await (
+	const html = await responseText(
 		await request(SOURCE_URL, {
 			'user-agent': 'Mozilla/5.0 (fl-voting-estimations)',
 			accept: 'text/html'
 		})
-	).text();
+	);
 	const anchor = html.indexOf('{fetchedAt:');
 	if (anchor >= 0) return parseLiteral(html, anchor) as Record<string, unknown>;
 	const script = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)]
@@ -23,7 +24,7 @@ export async function fetchSource(signal: AbortSignal): Promise<Record<string, u
 			(url) => url.origin === new URL(SOURCE_URL).origin && url.pathname.startsWith('/assets/')
 		);
 	if (!script) throw new Error('Could not find source data script');
-	const javascript = await (await request(script, { accept: 'text/javascript' })).text();
+	const javascript = await responseText(await request(script, { accept: 'text/javascript' }));
 	const name = javascript.match(/await\s+(\w+)\(\{data:\{force:/)?.[1];
 	const id = name
 		? javascript.match(
@@ -39,7 +40,7 @@ export async function fetchSource(signal: AbortSignal): Promise<Record<string, u
 		'x-tsr-serverFn': 'true',
 		'sec-fetch-site': 'same-origin'
 	});
-	const payload = fromCrossJSON(await response.json(), { refs: new Map() }) as {
+	const payload = fromCrossJSON(JSON.parse(await responseText(response)), { refs: new Map() }) as {
 		result?: Record<string, unknown>;
 		error?: unknown;
 	};

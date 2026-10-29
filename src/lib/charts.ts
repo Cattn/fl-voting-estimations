@@ -433,3 +433,218 @@ export function mapOption(p: Palette, rows: MapRow[], metric: MapMetric): EChart
 		]
 	} as EChartsOption;
 }
+
+const clockLabel = (m: number) => {
+	const h = Math.floor(m / 60);
+	return `${h % 12 || 12}${m % 60 ? `:${String(m % 60).padStart(2, '0')}` : ''}${h < 12 ? 'a' : 'p'}`;
+};
+
+export interface DayLine {
+	minute: number;
+	margin: number;
+}
+
+export function edDayChartOption(
+	p: Palette,
+	lines: { reported: DayLine[]; path: DayLine[]; live: DayLine[] },
+	target: number,
+	selected: Record<string, boolean> = {}
+): EChartsOption {
+	const all = [...lines.reported, ...lines.path, ...lines.live].map((d) => d.margin);
+	const lo = Math.floor(Math.min(target, ...all) - 0.6);
+	const hi = Math.ceil(Math.max(target, ...all) + 0.6);
+	const pts = (rows: DayLine[]) => rows.map((d) => [d.minute, d.margin]);
+	const series = (
+		name: string,
+		data: number[][],
+		dash: 'solid' | number[],
+		color: string,
+		width: number,
+		symbol: boolean
+	) => ({
+		name,
+		type: 'line' as const,
+		data,
+		symbol: symbol ? 'circle' : 'none',
+		symbolSize: 6,
+		lineStyle: { width, type: dash, color, cap: 'round' },
+		itemStyle: { color, borderColor: p.surface, borderWidth: 1.5 },
+		endLabel: {
+			show: data.length > 0,
+			color: p.ink,
+			fontSize: 11,
+			backgroundColor: p.surface,
+			padding: [2, 4],
+			borderRadius: 3,
+			formatter: (o: { value: unknown }) => fmtMargin((o.value as number[])[1], 2)
+		}
+	});
+	return {
+		textStyle: baseText(p),
+		animationDuration: 300,
+		grid: { left: 52, right: 64, top: 16, bottom: 36 },
+		legend: { show: false, selected },
+		tooltip: {
+			...tooltipBase(p),
+			trigger: 'axis',
+			axisPointer: { type: 'line', lineStyle: { color: p.axis } },
+			formatter: (params: unknown) => {
+				const rows = params as { seriesName: string; value: number[] }[];
+				if (!rows.length) return '';
+				const body = rows
+					.map(
+						(r) =>
+							`<div style="display:flex;gap:12px;justify-content:space-between"><span>${r.seriesName}</span><b style="color:${signColor(p, r.value[1])}">${fmtMargin(r.value[1], 2)}</b></div>`
+					)
+					.join('');
+				return `<div style="min-width:170px"><div style="font-weight:600;margin-bottom:4px">${clockLabel(rows[0].value[0])} ET</div>${body}</div>`;
+			}
+		},
+		xAxis: {
+			type: 'value',
+			min: 7 * 60,
+			max: 20 * 60,
+			interval: 60,
+			axisLine: { lineStyle: { color: p.axis } },
+			splitLine: { show: false },
+			axisLabel: { color: p.muted, formatter: (v: number) => clockLabel(v) }
+		},
+		yAxis: {
+			type: 'value',
+			min: lo,
+			max: hi,
+			interval: Math.max(1, Math.round((hi - lo) / 6)),
+			axisLabel: { color: p.muted, formatter: (v: number) => fmtMargin(v, 0) },
+			splitLine: { lineStyle: { color: p.grid } }
+		},
+		series: [
+			{
+				...series('Reported', pts(lines.reported), 'solid', signColor(p, target), 2.5, true),
+				markLine: {
+					silent: true,
+					symbol: 'none',
+					label: { color: p.ink2, fontSize: 11, position: 'insideStartTop' },
+					data: [
+						{
+							yAxis: target,
+							lineStyle: { color: p.ink2, type: [2, 3], width: 1 },
+							label: { formatter: `Target ${fmtMargin(target, 2)}` }
+						},
+						{
+							xAxis: 19 * 60,
+							lineStyle: { color: p.axis, type: [3, 3] },
+							label: { formatter: 'Polls close', position: 'insideEndTop' }
+						},
+						{
+							xAxis: 20 * 60,
+							lineStyle: { color: p.axis, type: [3, 3] },
+							label: { formatter: 'Panhandle', position: 'insideEndTop' }
+						}
+					]
+				}
+			},
+			series('Path to target', pts(lines.path), [9, 6], signColor(p, target), 2, false),
+			series('Selected turnout', pts(lines.live), [0.1, 5], p.ink2, 2.5, false)
+		]
+	} as EChartsOption;
+}
+
+export interface NightPoint {
+	minute: number;
+	counted: number;
+	margin: number;
+	registration: number;
+}
+
+export function resultsNightChartOption(
+	p: Palette,
+	points: NightPoint[],
+	projection: { margin: number; electorate: number; range: number },
+	candidate: string
+): EChartsOption {
+	const last = points.at(-1);
+	const all = [
+		...points.flatMap((d) => [d.margin, d.registration]),
+		projection.margin + projection.range,
+		projection.margin - projection.range,
+		projection.electorate
+	];
+	const lo = Math.floor(Math.min(...all) - 1);
+	const hi = Math.ceil(Math.max(...all) + 1);
+	const toEnd = (from: number, to: number) =>
+		last
+			? [
+					[last.counted, from],
+					[100, to]
+				]
+			: [];
+	return {
+		textStyle: baseText(p),
+		animationDuration: 300,
+		grid: { left: 52, right: 64, top: 16, bottom: 36 },
+		tooltip: {
+			...tooltipBase(p),
+			trigger: 'item',
+			formatter: (o: unknown) => {
+				const d = (o as { data: number[]; seriesName: string }).data;
+				const pt = points.find((x) => x.counted === d[0]);
+				return `<div style="min-width:160px"><div style="font-weight:600;margin-bottom:4px">${d[0].toFixed(0)}% counted${pt ? ` · ${clockLabel(pt.minute)}` : ''}</div><div>${(o as { seriesName: string }).seriesName}: <b style="color:${signColor(p, d[1])}">${fmtMargin(d[1], 1)}</b></div></div>`;
+			}
+		},
+		xAxis: {
+			type: 'value',
+			min: Math.max(0, Math.floor(((points[0]?.counted ?? 0) - 5) / 10) * 10),
+			max: 100,
+			axisLine: { lineStyle: { color: p.axis } },
+			splitLine: { show: false },
+			axisLabel: { color: p.muted, formatter: (v: number) => `${v}%` }
+		},
+		yAxis: {
+			type: 'value',
+			min: lo,
+			max: hi,
+			axisLabel: { color: p.muted, formatter: (v: number) => fmtMargin(v, 0) },
+			splitLine: { lineStyle: { color: p.grid } }
+		},
+		series: [
+			{
+				name: `${candidate} margin`,
+				type: 'line',
+				data: points.map((d) => [d.counted, d.margin]),
+				symbolSize: 6,
+				lineStyle: { width: 2.5, color: signColor(p, last?.margin ?? 0) },
+				itemStyle: { color: signColor(p, last?.margin ?? 0) }
+			},
+			{
+				name: 'Registration margin of counted ballots',
+				type: 'line',
+				data: points.map((d) => [d.counted, d.registration]),
+				symbol: 'none',
+				lineStyle: { width: 1.8, type: [0.1, 4], cap: 'round', color: p.ink2 }
+			},
+			{
+				name: 'Rough projection',
+				type: 'line',
+				data: toEnd(last?.margin ?? 0, projection.margin),
+				symbol: 'none',
+				lineStyle: { width: 1.8, type: [8, 5], color: p.muted },
+				endLabel: {
+					show: true,
+					color: p.ink,
+					fontSize: 11,
+					formatter: () => fmtMargin(projection.margin, 1)
+				},
+				markArea: {
+					silent: true,
+					itemStyle: { color: p.muted, opacity: 0.12 },
+					data: [
+						[
+							{ coord: [98.5, projection.margin - projection.range] },
+							{ coord: [100, projection.margin + projection.range] }
+						]
+					]
+				}
+			}
+		]
+	} as EChartsOption;
+}
