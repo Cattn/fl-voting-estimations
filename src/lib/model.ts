@@ -126,16 +126,18 @@ export function floridaClock(now = new Date()): FloridaClock {
 	};
 }
 
-const votingShare = (minute?: number) =>
-	minute === undefined
-		? 1
-		: Math.min(
-				1,
-				Math.max(
-					MIN_VOTING_SHARE,
-					(minute - VOTING_HOURS_ET.open) / (VOTING_HOURS_ET.close - VOTING_HOURS_ET.open)
-				)
-			);
+export const LATE_REPORTING_SHARE = 0.03;
+
+function votingShare(minute?: number): number {
+	if (minute === undefined) return 1;
+	const { open, close } = VOTING_HOURS_ET;
+	const cutoff = POLLS_CLOSED_HOUR_ET * 60;
+	const share =
+		minute <= close
+			? ((1 - LATE_REPORTING_SHARE) * (minute - open)) / (close - open)
+			: 1 - LATE_REPORTING_SHARE + (LATE_REPORTING_SHARE * (minute - close)) / (cutoff - close);
+	return Math.min(1, Math.max(MIN_VOTING_SHARE, share));
+}
 
 export interface CurrentDay {
 	date: string;

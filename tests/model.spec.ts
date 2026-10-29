@@ -335,6 +335,22 @@ describe('day status', () => {
 		expect(evening.current?.projectedVolume).toBe(1000);
 	});
 
+	it('expects late uploads between 7 PM and the 9 PM cutoff', () => {
+		const big = {
+			...feed,
+			earlyDays: feed.earlyDays.map((d) =>
+				d.date === '2026-10-27'
+					? { ...d, rep: 50_000, dem: 40_000, npa: 10_000, total: 100_000 }
+					: d
+			)
+		};
+		const at = (minute: number) =>
+			buildCtx(big, { today: '2026-10-27', pollsClosed: false, minute }).current!.restVolume;
+		expect(at(19 * 60)).toBe(3000);
+		expect(at(20 * 60)).toBe(2000);
+		expect(at(21 * 60 - 1)).toBe(0);
+	});
+
 	it('moves the rest of today toward the count as more of the day is counted', () => {
 		const ctx = buildCtx(feed, { today: '2026-10-27', pollsClosed: false, minute: 13 * 60 });
 		const base = currentDayBenchmark(ctx)!.margin;
