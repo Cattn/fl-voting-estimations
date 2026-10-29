@@ -45,6 +45,23 @@
 			: option
 	);
 
+	const usesWheel = (o: EChartsOption) =>
+		!!o.dataZoom || [o.series].flat().some((s) => !!s && 'roam' in s && !!s.roam);
+
+	const init = (width: number, height: number) => {
+		if (usesWheel(option)) return echarts.init(el, undefined, { renderer: 'svg', width, height });
+		const add = EventTarget.prototype.addEventListener;
+		EventTarget.prototype.addEventListener = function (type, listener, options) {
+			const wheel = (type === 'wheel' || type === 'mousewheel') && el.contains(this as Node);
+			return add.call(this, type, listener, wheel ? { passive: true } : options);
+		};
+		try {
+			return echarts.init(el, undefined, { renderer: 'svg', width, height });
+		} finally {
+			EventTarget.prototype.addEventListener = add;
+		}
+	};
+
 	onMount(() => {
 		const media = matchMedia('(max-width: 767px)');
 		const update = () => (mobile = media.matches);
@@ -55,7 +72,7 @@
 			const height = el.clientHeight;
 			if (width <= 0 || height <= 0) return;
 			if (!chart) {
-				chart = echarts.init(el, undefined, { renderer: 'svg', width, height });
+				chart = init(width, height);
 			} else {
 				chart.resize({ width, height });
 			}

@@ -91,6 +91,7 @@ export function marginChartOption(
 		type: 'line' as const,
 		data,
 		z,
+		animation: data[0] !== null,
 		symbol: style.symbolSize ? 'circle' : 'none',
 		symbolSize: style.symbolSize,
 		showSymbol: style.symbolSize > 0,
