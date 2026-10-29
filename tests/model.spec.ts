@@ -425,44 +425,18 @@ describe('forecast', () => {
 describe('locked sliders', () => {
 	const ctx = buildCtx(extractFeed(html), open('2026-10-28'));
 
-	it('resets every forecast from before version 8 to the default once', () => {
+	it('resets every forecast from an older version to the default once', () => {
 		const defaults = defaultForecast(ctx);
 		expect(defaults.edTurnout).toBe(ED_TURNOUT);
 		const old = [
 			{ ...defaults, modelVersion: undefined, name: 'Mine', target: -6, edMargin: -41.9 },
 			{ ...defaults, modelVersion: 5, name: 'Mine', linked: false, edTurnout: 3_000_000 },
-			{ ...defaults, modelVersion: 6, name: 'Mine', target: -9 },
-			{ ...defaults, modelVersion: 7, name: 'Mine', linked: false, edMargin: -30 }
+			{ ...defaults, modelVersion: 8, name: 'Mine', target: -9 },
+			{ ...defaults, modelVersion: MODEL_VERSION - 1, name: 'Mine', linked: false, edMargin: -30 }
 		];
 		for (const f of old) expect(upgradeForecast(ctx, f)).toEqual({ ...defaults, name: 'Mine' });
 		const current = { ...defaults, target: -6 };
 		expect(upgradeForecast(ctx, current)).toBe(current);
-	});
-
-	it('refreshes version 8 projections while keeping the chosen target and turnout', () => {
-		const defaults = defaultForecast(ctx);
-		const stale = {
-			...defaults,
-			modelVersion: 8,
-			name: 'Mine',
-			target: -10,
-			edTurnout: 3_000_000,
-			mailMargin: 20,
-			days: defaults.days.map((d) => ({ ...d, volume: d.volume * 2, margin: d.margin + 5 }))
-		};
-		const linked = upgradeForecast(ctx, stale);
-		expect(linked).toMatchObject({
-			modelVersion: MODEL_VERSION,
-			name: 'Mine',
-			target: -10,
-			edTurnout: 3_000_000,
-			mailMargin: defaults.mailMargin
-		});
-		expect(linked.days.map((d) => d.volume)).toEqual(defaultDays(ctx).map((d) => d.volume));
-		expect(computeOutcome(ctx, linked).margin).toBeCloseTo(-10, 6);
-		const unlinked = upgradeForecast(ctx, { ...stale, linked: false, edMargin: -30 });
-		expect(unlinked.edMargin).toBe(-30);
-		expect(unlinked.days).toEqual(defaultDays(ctx));
 	});
 
 	it('applies each party recent return rate to its outstanding ballots', () => {
