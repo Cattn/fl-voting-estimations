@@ -575,8 +575,9 @@
 					{fmtInt(mailRem)} still to come
 					<Info align="left">
 						{fmtInt(feed.mail.total)} returned so far and {fmtInt(feed.outstanding.total)} outstanding
-						({fmtMargin(marginOf(feed.outstanding))}). What's left shrinks automatically as ballots
-						arrive.
+						({fmtMargin(marginOf(feed.outstanding))}). The default margin applies each party's
+						return rate over the last 7 days to its outstanding ballots. What's left shrinks
+						automatically as ballots arrive.
 					</Info>
 				</p>
 
@@ -603,9 +604,9 @@
 					<div class="text-2 mt-4 mb-1 flex items-center text-sm">
 						Upcoming IPEV days
 						<Info align="left">
-							Defaults: votes from the same weekday last week times recent growth; margins from the
-							last 3 weekdays, adjusted for weekends. The final Sunday uses only the counties that
-							open that day.
+							Defaults: votes from the same weekday last week times growth in counties open both
+							weeks; margins from the last 3 weekdays plus most of last weekend's swing. The final
+							Sunday uses only the counties that open that day, at reduced turnout.
 						</Info>
 					</div>
 					<div class="daily-inputs overflow-x-auto">
