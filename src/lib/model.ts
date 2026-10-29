@@ -96,9 +96,13 @@ export function buildHistory(feed: FeedData, asOfDate?: string): HistoryPoint[] 
 
 export const POLLS_CLOSED_HOUR_ET = 21;
 
+export const VOTING_HOURS_ET = { open: 7 * 60, close: 19 * 60 };
+export const MIN_VOTING_SHARE = 0.5;
+
 export interface FloridaClock {
 	today: string;
 	pollsClosed: boolean;
+	minute?: number;
 }
 
 export function floridaClock(now = new Date()): FloridaClock {
@@ -109,6 +113,7 @@ export function floridaClock(now = new Date()): FloridaClock {
 			month: '2-digit',
 			day: '2-digit',
 			hour: '2-digit',
+			minute: '2-digit',
 			hourCycle: 'h23'
 		})
 			.formatToParts(now)
@@ -116,9 +121,21 @@ export function floridaClock(now = new Date()): FloridaClock {
 	);
 	return {
 		today: `${parts.year}-${parts.month}-${parts.day}`,
-		pollsClosed: Number(parts.hour) >= POLLS_CLOSED_HOUR_ET
+		pollsClosed: Number(parts.hour) >= POLLS_CLOSED_HOUR_ET,
+		minute: Number(parts.hour) * 60 + Number(parts.minute)
 	};
 }
+
+const votingShare = (minute?: number) =>
+	minute === undefined
+		? 1
+		: Math.min(
+				1,
+				Math.max(
+					MIN_VOTING_SHARE,
+					(minute - VOTING_HOURS_ET.open) / (VOTING_HOURS_ET.close - VOTING_HOURS_ET.open)
+				)
+			);
 
 export interface CurrentDay {
 	date: string;
@@ -244,10 +261,20 @@ export function buildCtx(feed: FeedData, clock: FloridaClock): Ctx {
 		const soFarVolume = soFar?.total ?? 0;
 		const soFarGap = soFar ? soFar.dem - soFar.rep : 0;
 		const closedWithVotes = clock.pollsClosed && soFarVolume > 0;
-		const projectedVolume = closedWithVotes ? soFarVolume : Math.max(proj.volume, soFarVolume);
+		const projectedVolume = closedWithVotes
+			? soFarVolume
+			: Math.max(
+					proj.volume,
+					soFarVolume,
+					Math.round(soFarVolume / votingShare(clock.minute) / 1000) * 1000
+				);
 		const restVolume = projectedVolume - soFarVolume;
-		const wanted = (projectedVolume * proj.margin) / 100 - soFarGap;
-		const restGap = Math.max(-restVolume, Math.min(restVolume, wanted)) || 0;
+		const counted = projectedVolume ? soFarVolume / projectedVolume : 0;
+		const restMargin = soFarVolume
+			? proj.margin + ((soFarGap / soFarVolume) * 100 - proj.margin) * counted
+			: proj.margin;
+		const restGap =
+			Math.max(-restVolume, Math.min(restVolume, (restVolume * restMargin) / 100)) || 0;
 		current = {
 			date: currentDate,
 			pollsClosed: closedWithVotes,
@@ -340,7 +367,7 @@ export function reconcileDays(ctx: Ctx, days: ForecastDay[]): ForecastDay[] {
 const ipevGap = (days: ForecastDay[]) => days.reduce((a, d) => a + (d.volume * d.margin) / 100, 0);
 
 function todayFromShape(ctx: Ctx, days: ForecastDay[]): number {
-	const base = currentDayBenchmark(ctx)?.margin ?? 0;
+	const base = ctx.current?.projectedMargin ?? 0;
 	const shape = defaultDays(ctx);
 	const volume = days.reduce((a, d) => a + d.volume, 0);
 	if (!volume) return base;
@@ -375,7 +402,7 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 	if (!current) return null;
 	const volume = current.projectedVolume;
 	const planned =
-		margin ?? (f.today?.date === current.date ? f.today.margin : currentDayBenchmark(ctx)!.margin);
+		margin ?? (f.today?.date === current.date ? f.today.margin : current.projectedMargin);
 	if (current.pollsClosed) {
 		return {
 			margin: planned,
@@ -480,7 +507,7 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 
 	const total = components.reduce((a, c) => a + c.volume, 0);
 	const gap = components.reduce((a, c) => a + c.gap, 0);
-	const todayVol = plan?.swingable ? plan.volume : 0;
+	const todayVol = plan?.swingable ? plan.restVolume : 0;
 	const blockVol = ipevVol + todayVol;
 	const blockGap = ipevGap + (plan?.swingable ? plan.restGap : 0);
 	const requiredBlockGap = (f.target / 100) * total - (gap - blockGap);
@@ -502,17 +529,23 @@ export function computeOutcome(ctx: Ctx, f: Forecast): Outcome {
 			return { ...d, margin, gap: (d.volume * margin) / 100 };
 		}),
 		todayBenchmark:
-			plan && !current?.pollsClosed ? plan.margin + (plan.swingable ? shift : 0) : null,
+			plan && !current?.pollsClosed
+				? plan.swingable
+					? plan.margin + (shift * plan.restVolume) / plan.volume
+					: plan.projectedMargin
+				: null,
 		scenarioIpevMargin: ipevVol ? (ipevGap / ipevVol) * 100 : 0,
 		cushion: gap - (f.target / 100) * total
 	};
 }
 
 export function shiftDays(ctx: Ctx, f: Forecast, delta: number): Forecast {
-	const swingToday = f.today && todayPlan(ctx, f)?.swingable;
+	const plan = f.today ? todayPlan(ctx, f) : null;
 	return {
 		...f,
-		today: swingToday ? { ...f.today!, margin: f.today!.margin + delta } : f.today,
+		today: plan?.swingable
+			? { ...f.today!, margin: f.today!.margin + (delta * plan.restVolume) / plan.volume }
+			: f.today,
 		days: f.days.map((d) => ({ ...d, margin: d.margin + delta }))
 	};
 }
@@ -555,7 +588,7 @@ export function rebalanceForecast(ctx: Ctx, f: Forecast): Forecast {
 		),
 		today:
 			next.today && ctx.current && !ctx.current.pollsClosed
-				? boundDay(next.today, currentDayBenchmark(ctx)?.margin ?? next.today.margin)
+				? boundDay(next.today, ctx.current.projectedMargin)
 				: next.today
 	});
 	const bounded = bound(f);
