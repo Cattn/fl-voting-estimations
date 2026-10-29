@@ -4,10 +4,10 @@ import {
 	buildCtx,
 	buildHistory,
 	computeOutcome,
+	rebalanceForecast,
 	currentDayBenchmark,
 	defaultForecast,
 	defaultDays,
-	defaultMailFinal,
 	defaultMailMargin,
 	floridaClock,
 	fmtMargin,
@@ -19,12 +19,12 @@ import {
 	setIpevHoldingTarget,
 	swingToTarget,
 	upgradeForecast,
-	BASELINE,
-	MAIL_SWING,
 	MODEL_VERSION,
 	ED_RANGE,
 	ED_TURNOUT,
-	IPEV_RANGE
+	IPEV_RANGE,
+	AUTO_IPEV_SWING,
+	AUTO_IPEV_LIMIT
 } from '../src/lib/model.ts';
 
 const day = (date: string, rep: number, dem: number, other: number) =>
@@ -46,6 +46,134 @@ const county = (code: string, rep: number, dem: number) => ({
 	npa: 0,
 	oth: 0,
 	total: rep + dem
+});
+
+describe('automatic EV and ED balance', () => {
+	const reported = (date: string, margin: number) => {
+		const total = 2000;
+		const dem = Math.round((total * (1 + margin / 100)) / 2);
+		return {
+			date,
+			rep: total - dem,
+			dem,
+			npa: 0,
+			oth: 0,
+			total,
+			counties: [county('DAD', total - dem, dem)]
+		};
+	};
+	const updateTotals = (feed: ReturnType<typeof countyFeed>) => {
+		feed.early = feed.earlyDays.reduce(
+			(sum, d) => ({
+				rep: sum.rep + d.rep,
+				dem: sum.dem + d.dem,
+				npa: sum.npa + d.npa,
+				oth: sum.oth + d.oth,
+				total: sum.total + d.total
+			}),
+			{ rep: 0, dem: 0, npa: 0, oth: 0, total: 0 }
+		);
+	};
+	const start = () => {
+		const feed = countyFeed();
+		updateTotals(feed);
+		const ctx = buildCtx(feed, open('2026-10-28'));
+		return {
+			feed,
+			ctx,
+			forecast: rebalanceForecast(ctx, { ...defaultForecast(ctx), edTurnout: 26000 })
+		};
+	};
+	it('does not present a freshly recalculated requirement as a completed-day benchmark', () => {
+		const { feed, forecast } = start();
+		feed.earlyDays.push(reported('2026-10-28', 5));
+		updateTotals(feed);
+		const openCtx = buildCtx(feed, open('2026-10-28'));
+		expect(computeOutcome(openCtx, forecast).todayBenchmark).not.toBeNull();
+		const closedCtx = buildCtx(feed, { today: '2026-10-28', pollsClosed: true });
+		const closed = defaultForecast(closedCtx);
+		expect(computeOutcome(closedCtx, closed).todayBenchmark).toBeNull();
+		expect(
+			computeOutcome(closedCtx, closed).components.find((c) => c.key === 'today')?.volume
+		).toBe(0);
+		expect(feed.earlyDays.at(-1)?.dem).toBe(1050);
+	});
+	it('uses completed-day performance immediately and makes ED absorb most of an EV shortfall', () => {
+		const { feed, forecast } = start();
+		feed.earlyDays.push(reported('2026-10-28', 5));
+		updateTotals(feed);
+		const closedCtx = buildCtx(feed, { today: '2026-10-28', pollsClosed: true });
+		const next = rebalanceForecast(closedCtx, forecast);
+		expect(defaultDays(closedCtx)[0].margin).toBeGreaterThan(
+			defaultDays(buildCtx(feed, open('2026-10-28')))[0].margin
+		);
+		for (const base of defaultDays(closedCtx))
+			expect(
+				Math.abs(next.days.find((d) => d.date === base.date)!.margin - base.margin)
+			).toBeLessThanOrEqual(AUTO_IPEV_LIMIT + 1e-9);
+		expect(next.edMargin).toBeLessThan(forecast.edMargin);
+		expect(computeOutcome(closedCtx, next).margin).toBeCloseTo(forecast.target, 6);
+		expect(next.today).toEqual(forecast.today);
+	});
+	it('does not repeatedly increase EV requirements as more Democratic-leaning days close', () => {
+		const initial = start();
+		let forecast = initial.forecast;
+		for (const date of ['2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']) {
+			initial.feed.earlyDays.push(reported(date, 5));
+			updateTotals(initial.feed);
+			const ctx = buildCtx(initial.feed, { today: date, pollsClosed: true });
+			forecast = rebalanceForecast(ctx, reconcileForecast(ctx, forecast));
+			for (const base of defaultDays(ctx))
+				expect(
+					Math.abs(forecast.days.find((d) => d.date === base.date)!.margin - base.margin)
+				).toBeLessThanOrEqual(AUTO_IPEV_LIMIT + 1e-9);
+			expect(computeOutcome(ctx, forecast).margin).toBeCloseTo(forecast.target, 6);
+			expect(rebalanceForecast(ctx, forecast)).toEqual(forecast);
+		}
+	});
+	it('preserves explicitly chosen ED and EV inputs when balancing new reports', () => {
+		const { feed, ctx, forecast } = start();
+		const fixedEd = setEdHoldingTarget(ctx, forecast, forecast.edMargin - 1);
+		const fixedEv = setIpevHoldingTarget(ctx, forecast, -5);
+		feed.mail = { ...feed.mail, dem: feed.mail.dem + 10, total: feed.mail.total + 10 };
+		const nextCtx = buildCtx(feed, open('2026-10-28'));
+		expect(rebalanceForecast(nextCtx, fixedEd).edMargin).toBeCloseTo(fixedEd.edMargin, 6);
+		expect(rebalanceForecast(nextCtx, fixedEv).days).toEqual(fixedEv.days);
+		expect(computeOutcome(nextCtx, rebalanceForecast(nextCtx, fixedEv)).margin).toBeCloseTo(
+			forecast.target,
+			6
+		);
+	});
+	it('leaves an honest gap when bounded inputs cannot achieve an extreme target', () => {
+		const { ctx, forecast } = start();
+		const next = rebalanceForecast(ctx, { ...forecast, target: -99 });
+		expect(next.edMargin).toBe(ED_RANGE.min);
+		expect(computeOutcome(ctx, next).margin).toBeGreaterThan(-99);
+		for (const base of defaultDays(ctx))
+			expect(
+				Math.abs(next.days.find((d) => d.date === base.date)!.margin - base.margin)
+			).toBeLessThanOrEqual(AUTO_IPEV_LIMIT + 1e-9);
+		expect(rebalanceForecast(ctx, next)).toEqual(next);
+	});
+	it('upgrades version 6 without losing targets or custom turnout, and preserves unlocked scenarios', () => {
+		const { ctx, forecast } = start();
+		const saved = {
+			...forecast,
+			name: 'My scenario',
+			modelVersion: 6,
+			target: -9,
+			days: forecast.days.map((d) => ({ ...d, margin: -28 }))
+		};
+		const next = upgradeForecast(ctx, saved);
+		expect(next.name).toBe(saved.name);
+		expect(next.target).toBe(saved.target);
+		expect(next.edTurnout).toBe(saved.edTurnout);
+		expect(next.modelVersion).toBe(MODEL_VERSION);
+		expect(computeOutcome(ctx, next).margin).toBeCloseTo(-9, 6);
+		const unlocked = upgradeForecast(ctx, { ...saved, linked: false });
+		expect(unlocked.days).toEqual(saved.days);
+		expect(unlocked.edMargin).toBe(saved.edMargin);
+	});
 });
 
 const countyFeed = () => {
@@ -273,7 +401,12 @@ describe('forecast', () => {
 	it('benchmarks land exactly on the target', () => {
 		const f = { ...defaultForecast(ctx), target: -5, edMargin: -15, edTurnout: 4000 };
 		const o = computeOutcome(ctx, f);
-		const withBench = computeOutcome(ctx, { ...f, days: o.benchmarks });
+		const withBench = computeOutcome(ctx, {
+			...f,
+			days: o.benchmarks,
+			today:
+				f.today && o.todayBenchmark !== null ? { ...f.today, margin: o.todayBenchmark } : f.today
+		});
 		expect(withBench.margin).toBeCloseTo(-5, 6);
 		expect(o.benchmarks.reduce((a, b) => a + b.gap, 0)).toBeCloseTo(o.requiredIpevGap, 6);
 	});
@@ -320,36 +453,30 @@ describe('locked sliders', () => {
 		expect(defaultMailMargin(feed, '2026-10-28')).toBe(10);
 	});
 
-	it('reaches the R+8.5 default by swinging all remaining margins from the R+5 baseline', () => {
+	it('reaches the R+8.5 default while keeping EV close to the observed day profile', () => {
 		const f = defaultForecast(ctx);
-		const baseline = holdTarget(ctx, {
-			...f,
-			target: -5,
-			edMargin: -10,
-			mailFinal: defaultMailFinal(ctx.feed),
-			mailMargin: defaultMailMargin(ctx.feed),
-			days: defaultDays(ctx)
-		});
-		const shift = f.edMargin - baseline.edMargin;
 		expect(f.target).toBe(-8.5);
-		expect(f).toEqual(swingToTarget(ctx, baseline, -8.5));
-		expect(f.mailMargin - baseline.mailMargin).toBeCloseTo(MAIL_SWING * shift, 6);
-		expect(
-			computeOutcome(ctx, f).scenarioIpevMargin - computeOutcome(ctx, baseline).scenarioIpevMargin
-		).toBeCloseTo(shift, 6);
+		for (const d of defaultDays(ctx))
+			expect(
+				Math.abs(f.days.find((p) => p.date === d.date)!.margin - d.margin)
+			).toBeLessThanOrEqual(AUTO_IPEV_LIMIT);
+		expect(f.mailMargin).toBe(defaultMailMargin(ctx.feed, ctx.current?.date));
 		expect(computeOutcome(ctx, f).margin).toBeCloseTo(-8.5, 6);
 	});
 
-	it('swings ED, future IPEV, and remaining mail together, with mail damped, to hit a new target', () => {
+	it('damps automatic EV shifts relative to ED without chasing mail margins', () => {
 		const f = defaultForecast(ctx);
 		const before = computeOutcome(ctx, f).scenarioIpevMargin;
 		const g = swingToTarget(ctx, f, -10);
 		const o = computeOutcome(ctx, g);
 		expect(o.margin).toBeCloseTo(-10, 6);
-		expect(o.scenarioIpevMargin - before).toBeCloseTo(g.edMargin - f.edMargin, 6);
-		expect(g.mailMargin - f.mailMargin).toBeCloseTo(MAIL_SWING * (g.edMargin - f.edMargin), 6);
+		expect(o.scenarioIpevMargin - before).toBeCloseTo(
+			AUTO_IPEV_SWING * (g.edMargin - f.edMargin),
+			6
+		);
+		expect(g.mailMargin).toBe(f.mailMargin);
 		expect(g.mailFinal).toBe(f.mailFinal);
-		expect(g.edMargin).toBeLessThan(-10);
+		expect(g.edMargin).toBeLessThan(f.edMargin);
 	});
 
 	it('can swing a forecast with only remaining mail', () => {
@@ -367,7 +494,7 @@ describe('locked sliders', () => {
 	});
 
 	it('solves ED when IPEV is moved and IPEV when ED is moved', () => {
-		const f = defaultForecast(ctx);
+		const f = rebalanceForecast(ctx, { ...defaultForecast(ctx), edTurnout: 4000 });
 		const a = setIpevHoldingTarget(ctx, f, -2);
 		expect(computeOutcome(ctx, a).scenarioIpevMargin).toBeCloseTo(-2, 6);
 		expect(computeOutcome(ctx, a).margin).toBeCloseTo(f.target, 6);
@@ -385,8 +512,9 @@ describe('locked sliders', () => {
 		expect(ipevA).toBeGreaterThan(computeOutcome(ctx, f).scenarioIpevMargin);
 		expect(computeOutcome(ctx, a).margin).toBeCloseTo(f.target, 6);
 		const b = setEdHoldingTarget(ctx, f, ED_RANGE.max);
-		expect(b.edMargin).toBeLessThan(ED_RANGE.max);
-		expect(computeOutcome(ctx, b).scenarioIpevMargin).toBeCloseTo(IPEV_RANGE.min, 6);
+		expect(b.edMargin).toBeLessThanOrEqual(ED_RANGE.max);
+		expect(computeOutcome(ctx, b).scenarioIpevMargin).toBeGreaterThanOrEqual(IPEV_RANGE.min);
+		expect(computeOutcome(ctx, b).scenarioIpevMargin).toBeLessThanOrEqual(IPEV_RANGE.max);
 		expect(computeOutcome(ctx, b).margin).toBeCloseTo(f.target, 6);
 		const c = setEdHoldingTarget(ctx, f, -25);
 		expect(c.edMargin).toBe(-25);

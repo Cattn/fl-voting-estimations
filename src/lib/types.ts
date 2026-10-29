@@ -64,4 +64,5 @@ export interface Forecast {
 	days: ForecastDay[];
 	today?: ForecastDay;
 	linked?: boolean;
+	balance?: 'adaptive' | 'ed' | 'ipev';
 }
