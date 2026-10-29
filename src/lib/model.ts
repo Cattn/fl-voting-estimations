@@ -308,7 +308,7 @@ export const DEFAULT_TARGET = -8.5;
 
 export const ED_TURNOUT = 2_600_000;
 
-export const MODEL_VERSION = 9;
+export const MODEL_VERSION = 10;
 export const AUTO_IPEV_SWING = 0.25;
 export const AUTO_IPEV_LIMIT = 3;
 
@@ -401,16 +401,7 @@ export function todayPlan(ctx: Ctx, f: Forecast, margin?: number): TodayPlan | n
 
 export function upgradeForecast(ctx: Ctx, f: Forecast): Forecast {
 	if (f.modelVersion === MODEL_VERSION) return f;
-	if (f.modelVersion !== 8) return { ...defaultForecast(ctx), name: f.name };
-	const fresh = defaultForecast(ctx);
-	const updated = reconcileForecast(ctx, {
-		...f,
-		modelVersion: MODEL_VERSION,
-		mailMargin: fresh.mailMargin,
-		days: defaultDays(ctx),
-		today: undefined
-	});
-	return f.linked ? rebalanceForecast(ctx, updated) : updated;
+	return { ...defaultForecast(ctx), name: f.name };
 }
 
 export interface Component {
