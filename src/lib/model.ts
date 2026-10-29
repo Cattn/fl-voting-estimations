@@ -126,17 +126,10 @@ export function floridaClock(now = new Date()): FloridaClock {
 	};
 }
 
-export const LATE_REPORTING_SHARE = 0.03;
-
 function votingShare(minute?: number): number {
 	if (minute === undefined) return 1;
 	const { open, close } = VOTING_HOURS_ET;
-	const cutoff = POLLS_CLOSED_HOUR_ET * 60;
-	const share =
-		minute <= close
-			? ((1 - LATE_REPORTING_SHARE) * (minute - open)) / (close - open)
-			: 1 - LATE_REPORTING_SHARE + (LATE_REPORTING_SHARE * (minute - close)) / (cutoff - close);
-	return Math.min(1, Math.max(MIN_VOTING_SHARE, share));
+	return Math.min(1, Math.max(MIN_VOTING_SHARE, (minute - open) / (close - open)));
 }
 
 export interface CurrentDay {
@@ -244,6 +237,22 @@ function projectDays(days: DayCounts[], dates: string[], finalDayOnly = true): F
 	});
 }
 
+export function missingVolume(complete: DayCounts[], today: DayCounts | null, date: string): number {
+	const recent = complete.slice(-3);
+	if (!recent.length || !recent.every((d) => d.counties?.length)) return 0;
+	const reported = new Set(today?.counties?.filter((c) => c.total > 0).map((c) => c.code));
+	const lastWeek = complete.find((d) => d.date === addDays(date, -7));
+	const finalDay = date === EV_END;
+	return recent.at(-1)!.counties!.reduce((total, { code }) => {
+		if (reported.has(code) || (finalDay && !FINAL_DAY_COUNTIES.has(code))) return total;
+		const rows = recent.map((d) => d.counties!.find((c) => c.code === code)?.total ?? 0);
+		if (rows.some((v) => v === 0)) return total;
+		const prev = lastWeek?.counties?.find((c) => c.code === code)?.total ?? 0;
+		const usual = prev || rows.reduce((a, v) => a + v, 0) / rows.length;
+		return total + usual * (finalDay ? FINAL_DAY_TURNOUT : 1);
+	}, 0);
+}
+
 export function buildCtx(feed: FeedData, clock: FloridaClock): Ctx {
 	const { today } = clock;
 	const evStart = feed.earlyDays[0]?.date ?? today;
@@ -268,7 +277,11 @@ export function buildCtx(feed: FeedData, clock: FloridaClock): Ctx {
 			: Math.max(
 					proj.volume,
 					soFarVolume,
-					Math.round(soFarVolume / votingShare(clock.minute) / 1000) * 1000
+					Math.round(
+					(soFarVolume / votingShare(clock.minute) +
+						missingVolume(complete, soFar, currentDate)) /
+						1000
+				) * 1000
 				);
 		const restVolume = projectedVolume - soFarVolume;
 		const counted = projectedVolume ? soFarVolume / projectedVolume : 0;
