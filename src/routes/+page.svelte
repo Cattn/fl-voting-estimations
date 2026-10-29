@@ -145,15 +145,21 @@
 	const dailyOption = $derived(dailyChartOption(theme.palette, dailyRows, visible(dailyHidden)));
 
 	const sensitivity = $derived(
-		[-5, -10, -15, -20, -25].map((ed) => {
-			const o = computeOutcome(ctx, { ...forecast, edMargin: ed });
-			return {
-				ed,
-				required: o.requiredIpevMargin,
-				requiredGap: o.requiredIpevGap,
-				final: o.margin
-			};
-		})
+		[
+			...[-5, -10, -15, -20, -25].filter((ed) => Math.abs(ed - forecast.edMargin) >= 0.05),
+			forecast.edMargin
+		]
+			.sort((a, b) => b - a)
+			.map((ed) => {
+				const o = computeOutcome(ctx, { ...forecast, edMargin: ed });
+				return {
+					ed,
+					current: ed === forecast.edMargin,
+					required: o.requiredIpevMargin,
+					requiredGap: o.requiredIpevGap,
+					final: o.margin
+				};
+			})
 	);
 
 	const pathOffset = $derived(today ? 1 : 0);
@@ -867,7 +873,9 @@
 						IPEV needed by Election Day margin
 						<Info align="right">
 							For a {fmtMargin(forecast.target)} final, holding your mail and turnout. "Needed" means
-							that margin or anything more Democratic. The shaded row is your Election Day input.
+							that margin or anything more Democratic. The shaded row is your current Election Day margin.
+							"Final at IPEV forecast" is the result if Election Day lands on that row and the remaining
+							IPEV days come in as currently forecast.
 						</Info>
 					</h2>
 					<div class="overflow-x-auto">
@@ -877,7 +885,8 @@
 									<th class="pr-2 pb-2 pl-1 text-left align-bottom font-medium">Election Day</th>
 									<th class="pb-2 pl-3 text-right align-bottom font-medium">IPEV needed</th>
 									<th class="pb-2 pl-3 text-right align-bottom font-medium">IPEV lead</th>
-									<th class="pb-2 pl-3 text-right align-bottom font-medium">Final with your IPEV</th
+									<th class="pb-2 pl-3 text-right align-bottom font-medium"
+										>Final at IPEV forecast</th
 									>
 								</tr>
 							</thead>
@@ -886,9 +895,7 @@
 									<tr
 										class="border-t"
 										style:border-color="var(--border)"
-										style:background={Math.abs(s.ed - forecast.edMargin) < 0.05
-											? 'var(--wash)'
-											: undefined}
+										style:background={s.current ? 'var(--wash)' : undefined}
 									>
 										<td class="py-2 pr-2 pl-1 font-medium whitespace-nowrap {marginClass(s.ed)}">
 											{fmtMargin(s.ed)}
