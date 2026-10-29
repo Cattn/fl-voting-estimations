@@ -69,8 +69,10 @@
 	</section>
 {/if}
 
-<div class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
-	<section class="card p-4 sm:col-span-2 lg:col-span-1">
+<div
+	class="mb-4 grid gap-4 max-sm:grid-cols-2 max-sm:gap-2 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]"
+>
+	<section class="card p-4 max-sm:col-span-2 sm:col-span-2 lg:col-span-1">
 		<div class="text-muted text-xs font-medium tracking-wide uppercase">
 			Seats · currently leading
 		</div>
@@ -131,7 +133,7 @@
 		</h2>
 		<span class="text-muted text-xs">Closest races right now</span>
 	</div>
-	<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+	<div class="watch grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 		{#each watch as r (r.district.n)}
 			<div class="rounded-lg border p-3" style:border-color="var(--border)">
 				<div class="mb-2 flex justify-between gap-2">
@@ -182,7 +184,7 @@
 			{/each}
 		</div>
 	</div>
-	<div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+	<div class="tiles grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
 		{#each rows as r (r.district.n)}
 			<a
 				href="#district-{r.district.n}"
@@ -289,3 +291,54 @@
 		calls. Historical comparisons remain unavailable until verified on the current district lines.
 	</p>
 </section>
+
+<style>
+	@media (max-width: 767px) {
+		.watch {
+			display: flex;
+			overflow-x: auto;
+			margin-inline: -0.875rem;
+			padding-inline: 0.875rem;
+			scroll-padding-inline: 0.875rem;
+			scroll-snap-type: x mandatory;
+			overscroll-behavior-x: contain;
+			scrollbar-width: none;
+		}
+
+		.watch::-webkit-scrollbar {
+			display: none;
+		}
+
+		.watch > div {
+			flex: 0 0 min(82%, 18rem);
+			scroll-snap-align: start;
+		}
+
+		.watch > p {
+			flex: 1;
+		}
+	}
+
+	@media (max-width: 639px) {
+		.tiles {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 0.375rem;
+		}
+
+		.tiles > a {
+			padding: 0.5rem;
+			font-size: 0.75rem;
+			line-height: 1.3;
+		}
+
+		.tiles > a > div:last-child {
+			font-size: 0.6875rem;
+		}
+	}
+
+	@media (max-width: 359px) {
+		.tiles {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+</style>

@@ -83,7 +83,7 @@
 			</div>
 			<div class="text-2 mt-1 text-xs">Vote difference</div>
 		</div>
-		<div class="card col-span-2 p-4 lg:col-span-1">
+		<div class="card col-span-2 p-4 lg:col-span-1 {today.pollsClosed ? 'max-md:col-span-1' : ''}">
 			<div class="text-muted text-xs font-medium uppercase">Party share today</div>
 			<div class="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-lg font-semibold">
 				<span class="text-rep"
@@ -96,7 +96,7 @@
 			<div class="text-2 mt-1 text-xs">Share of all votes today</div>
 		</div>
 	</div>
-	<div class="card mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+	<div class="mail-row card mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
 		<div class="flex items-center font-medium">
 			Mail reported today<Info align="left"
 				>Mail returns assigned to this date by the source, including any batch uploads. These are
@@ -133,8 +133,22 @@
 		.stats-grid {
 			gap: 0.5rem;
 		}
+		.stats-grid > .card {
+			padding: 0.75rem 0.875rem;
+		}
 		.text-2xl {
 			font-size: 1.25rem;
+		}
+		.mail-row {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.375rem 0.75rem;
+			padding: 0.75rem 0.875rem;
+		}
+		.mail-row > :first-child,
+		.mail-row > :last-child,
+		.mail-row > .text-xs {
+			grid-column: 1 / -1;
 		}
 	}
 </style>

@@ -18,7 +18,13 @@
 			? {
 					...option,
 					...(option.grid && !Array.isArray(option.grid)
-						? { grid: { ...option.grid, left: 44, right: option.grid.right === 76 ? 60 : 12 } }
+						? {
+								grid: {
+									...option.grid,
+									left: 44,
+									right: option.grid.right === 76 ? 60 : option.grid.right === 64 ? 52 : 12
+								}
+							}
 						: {}),
 					tooltip: {
 						...(!Array.isArray(option.tooltip) ? option.tooltip : {}),

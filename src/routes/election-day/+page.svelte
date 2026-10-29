@@ -216,7 +216,11 @@
 					>
 				</h3>
 				<p class="text-muted mt-1 text-xs">Who still shows up decides the rest of the day.</p>
-				<div class="mt-2 flex flex-col gap-1.5" role="radiogroup" aria-label="Turnout preset">
+				<div
+					class="presets mt-2 flex flex-col gap-1.5"
+					role="radiogroup"
+					aria-label="Turnout preset"
+				>
 					{#each options as o (o.id)}
 						{@const on = choice === o.id}
 						{@const final = optionFinal(o.turnout)}
@@ -297,8 +301,8 @@
 		</aside>
 	{/if}
 
-	<div class="flex min-w-0 flex-col gap-6">
-		<section class="card p-4">
+	<div class="ed-main flex min-w-0 flex-col gap-6">
+		<section class="ed-hero card p-4">
 			{#if ed.phase === 'closed'}
 				<div class="text-muted text-xs font-medium tracking-wide uppercase">
 					{ed.turnoutFinal
@@ -484,7 +488,7 @@
 <details class="card mt-6 p-4">
 	<summary class="cursor-pointer text-base font-semibold">Early voting recap</summary>
 	<p class="text-muted mt-1 text-xs">Daily IPEV margins as reported. No projections.</p>
-	<div class="mt-3">
+	<div class="mt-3 max-md:overflow-x-auto">
 		<EChart
 			option={recapOption}
 			height={300}
@@ -493,3 +497,28 @@
 		/>
 	</div>
 </details>
+
+<style>
+	@media (max-width: 767px) {
+		.ed-main {
+			display: contents;
+		}
+
+		.ed-hero {
+			order: -1;
+			border-color: var(--axis);
+		}
+
+		.ed-hero .text-3xl {
+			font-size: 2.25rem;
+			line-height: 1.15;
+		}
+
+		.presets button {
+			min-height: 48px;
+			align-content: center;
+			padding: 0.5rem 0.75rem;
+			touch-action: manipulation;
+		}
+	}
+</style>
