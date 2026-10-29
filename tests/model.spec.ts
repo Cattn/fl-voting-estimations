@@ -18,6 +18,7 @@ import {
 	setEdHoldingTarget,
 	setIpevHoldingTarget,
 	swingToTarget,
+	todayPlan,
 	upgradeForecast,
 	MODEL_VERSION,
 	ED_RANGE,
@@ -293,11 +294,13 @@ describe('Florida clock', () => {
 	it('uses Eastern time for the current day', () => {
 		expect(floridaClock(new Date('2026-10-28T03:30:00Z'))).toEqual({
 			today: '2026-10-27',
-			pollsClosed: true
+			pollsClosed: true,
+			minute: 23 * 60 + 30
 		});
 		expect(floridaClock(new Date('2026-10-28T04:30:00Z'))).toEqual({
 			today: '2026-10-28',
-			pollsClosed: false
+			pollsClosed: false,
+			minute: 30
 		});
 	});
 });
@@ -322,6 +325,27 @@ describe('day status', () => {
 		expect(ctx.current!.restVolume).toBe(ctx.current!.projectedVolume - 1000);
 		expect(Math.abs(ctx.current!.restGap)).toBeLessThanOrEqual(ctx.current!.restVolume);
 		expect(ctx.futureDates[0]).toBe('2026-10-28');
+	});
+
+	it('keeps expecting votes while polls are open after the count passes the estimate', () => {
+		const midday = buildCtx(feed, { today: '2026-10-27', pollsClosed: false, minute: 13 * 60 });
+		expect(midday.current?.projectedVolume).toBe(2000);
+		expect(midday.current?.restVolume).toBe(1000);
+		const evening = buildCtx(feed, { today: '2026-10-27', pollsClosed: false, minute: 19 * 60 });
+		expect(evening.current?.projectedVolume).toBe(1000);
+	});
+
+	it('moves the rest of today toward the count as more of the day is counted', () => {
+		const ctx = buildCtx(feed, { today: '2026-10-27', pollsClosed: false, minute: 13 * 60 });
+		const base = currentDayBenchmark(ctx)!.margin;
+		expect(base).toBe(-30);
+		expect((ctx.current!.restGap / ctx.current!.restVolume) * 100).toBeCloseTo(-20, 6);
+		expect(ctx.current!.projectedMargin).toBeCloseTo(-15, 6);
+		const f = defaultForecast(ctx);
+		expect(computeOutcome(ctx, f).todayBenchmark).toBeCloseTo(
+			todayPlan(ctx, f)!.projectedMargin,
+			4
+		);
 	});
 
 	it('stops expecting more of today once polls have closed', () => {
