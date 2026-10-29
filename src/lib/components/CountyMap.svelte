@@ -164,7 +164,7 @@
 	{/each}
 </div>
 
-<div class="mb-3 flex items-center gap-2 text-sm">
+<div class="day-row mb-3 flex items-center gap-2 text-sm">
 	<label class="flex items-center gap-2">
 		<span class="text-2">Day</span>
 		<select
@@ -298,3 +298,17 @@
 		{showAll ? 'Show top 15' : `Show all ${sorted.length} counties`}
 	</button>
 </div>
+
+<style>
+	@media (max-width: 767px) {
+		.day-row > label {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.day-row select {
+			flex: 1;
+			min-width: 0;
+		}
+	}
+</style>

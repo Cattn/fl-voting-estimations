@@ -19,7 +19,9 @@
 	role="group"
 	aria-label="Chart series"
 >
-	<span class="text-muted mr-1 text-xs">Click to show or hide:</span>
+	<span class="prompt text-muted mr-1 text-xs"
+		><span class="max-md:hidden">Click</span><span class="md:hidden">Tap a series</span> to show or hide:</span
+	>
 	{#each items as item (item.name)}
 		{@const on = !hidden[item.name]}
 		<button
@@ -111,8 +113,19 @@
 	}
 
 	@media (max-width: 767px) {
+		.prompt {
+			flex-basis: 100%;
+		}
+
 		.chip {
 			min-height: 40px;
+			gap: 0.25rem;
+			padding: 0.2rem 0.75rem 0.2rem 0.5rem;
+			font-size: 0.8125rem;
+		}
+
+		.chip svg {
+			width: 28px;
 		}
 	}
 </style>

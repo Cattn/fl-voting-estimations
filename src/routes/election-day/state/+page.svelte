@@ -93,7 +93,7 @@
 	{/if}
 </div>
 
-<div class="mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Race">
+<div class="race-tabs mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Race">
 	{#each tabs as t (t.race)}
 		<button
 			class="btn"
@@ -260,3 +260,27 @@
 	Unofficial results from the Florida Department of State. Statewide 2024 presidential result for
 	reference: {fmtMargin(-PRES_2024_STATE, 1)}.
 </p>
+
+<style>
+	@media (max-width: 767px) {
+		.race-tabs {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			margin-inline: -0.75rem;
+			padding-inline: 0.75rem;
+			scroll-padding-inline: 0.75rem;
+			scroll-snap-type: x proximity;
+			scrollbar-width: none;
+		}
+
+		.race-tabs::-webkit-scrollbar {
+			display: none;
+		}
+
+		.race-tabs > .btn {
+			flex-shrink: 0;
+			scroll-snap-align: start;
+			white-space: nowrap;
+		}
+	}
+</style>

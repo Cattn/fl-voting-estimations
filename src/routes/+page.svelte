@@ -396,7 +396,7 @@
 				{fmtLead(feed.mail.dem - feed.mail.rep)} · {fmtInt(feed.mail.total)}
 			</div>
 		</div>
-		<div class="card p-4">
+		<div class="headline-hero card p-4">
 			<div class="text-muted flex items-center text-xs font-medium tracking-wide uppercase">
 				Your final<Info>Projected final electorate from your forecast, including Election Day.</Info
 				>
@@ -406,7 +406,7 @@
 			</div>
 			<div class="text-2 text-sm">{fmtLead(outcome.gap)} · {fmtInt(outcome.total)} voters</div>
 		</div>
-		<div class="card col-span-2 p-4 lg:col-span-1">
+		<div class="card col-span-2 p-4 max-md:col-span-1 lg:col-span-1">
 			<div class="text-muted flex items-center text-xs font-medium tracking-wide uppercase">
 				IPEV needed<Info align="right"
 					>Average margin the remaining in-person early vote needs for your target, given your
@@ -631,7 +631,7 @@
 					/>
 					<button class="btn btn-primary" onclick={save}>Save</button>
 				</div>
-				<div class="mt-2 flex flex-wrap gap-2">
+				<div class="forecast-actions mt-2 flex flex-wrap gap-2">
 					{#if saved.length}
 						<select
 							class="field min-w-0 flex-1 text-sm"
@@ -688,7 +688,7 @@
 						class="num text-2 mt-3 space-y-1 rounded-lg p-3 text-sm"
 						style:background="var(--wash)"
 					>
-						<div class="flex flex-wrap items-center gap-x-2">
+						<div class="path-row flex flex-wrap items-center gap-x-2">
 							<b class="w-28" style:color="var(--ink)">
 								{forecast.linked ? `Path to ${fmtMargin(forecast.target)}` : 'Your scenario'}
 							</b>
@@ -723,7 +723,7 @@
 							>
 						</div>
 						{#if !forecast.linked}
-							<div class="flex flex-wrap items-center gap-x-2">
+							<div class="path-row flex flex-wrap items-center gap-x-2">
 								<b class="w-28" style:color="var(--ink)">Benchmark</b>
 								<span
 									>IPEV <span class={marginClass(outcome.requiredIpevMargin)}
