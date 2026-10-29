@@ -35,9 +35,16 @@ export function marginChartOption(
 	history: HistoryPoint[],
 	scenario: ProjectedPoint[],
 	benchmark: ProjectedPoint[],
-	final: { scenario: number; target: number; showBenchmark: boolean; inProgressDate?: string },
+	final: {
+		scenario: number;
+		target: number;
+		showBenchmark: boolean;
+		inProgressDate?: string;
+		projection?: boolean;
+	},
 	selected: Record<string, boolean> = {}
 ): EChartsOption {
+	const scenarioName = final.projection ? 'Projection' : 'Your scenario';
 	const dates = [
 		...new Set([...history.map((h) => h.date), ...scenario.map((s) => s.date)])
 	].sort();
@@ -110,11 +117,7 @@ export function marginChartOption(
 		legend: {
 			show: false,
 			selected,
-			data: [
-				'Reported',
-				'Your scenario',
-				...(final.showBenchmark ? ['Benchmark path to target'] : [])
-			]
+			data: ['Reported', scenarioName, ...(final.showBenchmark ? ['Benchmark path to target'] : [])]
 		},
 		tooltip: {
 			...tooltipBase(p),
@@ -138,7 +141,7 @@ export function marginChartOption(
 						const label = d.kind.startsWith('Reported') ? d.kind : r.seriesName;
 						return `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, d.value)}">${fmtMargin(d.value, 2)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(d.gap)} lead · ${fmtInt(d.total)} voters</div>`;
 					});
-				const sc = rows.find((r) => r.data!.kind === 'Your scenario')?.data;
+				const sc = rows.find((r) => r.data!.kind === scenarioName)?.data;
 				const reported = rows.find((r) => r.data!.kind === 'Reported so far')?.data;
 				const delta = reported && sc ? reported.value - sc.value : null;
 				const liveDiff =
@@ -196,15 +199,17 @@ export function marginChartOption(
 							yAxis: final.target,
 							lineStyle: { color: p.ink2, type: 'solid', width: 1, opacity: 0.6 },
 							label: {
-								formatter: `Target ${fmtMargin(final.target)} · your scenario ends ${fmtMargin(final.scenario, 2)} incl. Election Day`
+								formatter: final.projection
+									? `Projected final ${fmtMargin(final.scenario, 2)} incl. Election Day`
+									: `Target ${fmtMargin(final.target)} · your scenario ends ${fmtMargin(final.scenario, 2)} incl. Election Day`
 							}
 						}
 					]
 				}
 			},
 			lineSeries(
-				'Your scenario',
-				proj(scenario, 'Your scenario'),
+				scenarioName,
+				proj(scenario, scenarioName),
 				{ dash: [9, 6], width: 2, symbolSize: 7 },
 				2
 			),
@@ -236,8 +241,10 @@ export interface DailyRow {
 export function dailyChartOption(
 	p: Palette,
 	rows: DailyRow[],
-	selected: Record<string, boolean> = {}
+	selected: Record<string, boolean> = {},
+	projection = false
 ): EChartsOption {
+	const scenarioName = projection ? 'Projection' : 'Your scenario';
 	const values = rows.flatMap((r) =>
 		[r.reported?.margin, r.scenario?.margin, r.benchmark?.margin].filter(
 			(v): v is number => v !== undefined
@@ -269,7 +276,7 @@ export function dailyChartOption(
 			selected,
 			data: [
 				{ name: 'Reported IPEV', itemStyle: { color: p.ink2 } },
-				{ name: 'Your scenario', itemStyle: { color: p.ink2, opacity: 0.38 } },
+				{ name: scenarioName, itemStyle: { color: p.ink2, opacity: 0.38 } },
 				...(rows.some((r) => r.benchmark)
 					? [{ name: 'Benchmark', itemStyle: { color: p.ink } }]
 					: [])
@@ -289,12 +296,12 @@ export function dailyChartOption(
 				const comparison =
 					delta === null
 						? ''
-						: `<div style="color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">Vs. needed: ${Math.abs(delta) < 0.005 ? 'On pace currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
+						: `<div style="color:${Math.abs(delta) < 0.005 ? p.ink2 : signColor(p, delta)};font-size:11px">${projection ? 'Vs. projection' : 'Vs. needed'}: ${Math.abs(delta) < 0.005 ? 'On pace currently' : `${fmtMargin(delta, 2)} ahead currently`}</div>`;
 				const line = (label: string, x?: DailyRow['reported']) =>
 					x
 						? `<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${signColor(p, x.margin)}">${fmtMargin(x.margin)}</b></div><div style="color:${p.muted};font-size:11px;margin-bottom:4px">${fmtLead(x.gap)} lead · ${fmtInt(x.volume)} votes</div>`
 						: '';
-				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? 'Needed full day' : 'Your scenario', r.scenario)}${line('Benchmark', r.benchmark)}${r.inProgress ? comparison : r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Needed: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${fmtDay(r.date, true)}</div>${line(r.inProgress ? 'Reported so far' : 'Reported', r.reported)}${line('Counted so far', r.soFar)}${line(r.inProgress ? (projection ? 'Projected full day' : 'Needed full day') : scenarioName, r.scenario)}${line('Benchmark', r.benchmark)}${r.inProgress ? comparison : r.reference === undefined ? '' : `<div style="color:${p.muted};font-size:11px">Needed: ${fmtMargin(r.reference, 2)}</div>`}</div>`;
 			}
 		},
 		xAxis: {
@@ -327,7 +334,7 @@ export function dailyChartOption(
 				}
 			},
 			{
-				name: 'Your scenario',
+				name: scenarioName,
 				type: 'bar',
 				barWidth: '58%',
 				data: rows.map((r) => bar(r.scenario, true)),

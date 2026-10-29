@@ -29,9 +29,7 @@
 			>{fmtDay(today.date)} · {today.pollsClosed ? 'Polls closed' : 'So far'}</span
 		>
 		<Info align="left"
-			>Cards show today's in-person voting; mail returns are listed below. These are voter party
-			registrations, not candidate votes. Margin is (Democrats minus Republicans) divided by all
-			voters, including NPA and other registrations. Counts may still update.</Info
+			>Today's in-person voting by party registration. Counts may still update.</Info
 		>
 	</div>
 	<div
@@ -50,11 +48,8 @@
 		</div>
 		{#if !today.pollsClosed}<div class="card p-4">
 				<div class="text-muted flex items-center text-xs font-medium uppercase">
-					Vs. today's forecast<Info align="left"
-						>Compares today's actual margin with the margin today needs in your forecast, the same
-						figure shown in the table. Automatic EV adjustments stay near recent trends, with most
-						of the adjustment assigned to Election Day. A positive difference favors Democrats; a
-						negative difference favors Republicans.</Info
+					Vs. projection<Info align="left"
+						>Today's margin so far minus the projected margin for the full day.</Info
 					>
 				</div>
 				<div class="num mt-1 text-2xl font-semibold {color(delta ?? 0)}">
@@ -64,12 +59,9 @@
 					{delta === null
 						? 'Awaiting votes'
 						: Math.abs(delta) < 0.005
-							? 'On benchmark'
-							: `${delta > 0 ? 'D' : 'R'} ahead of benchmark`}
+							? 'On projection'
+							: `${delta > 0 ? 'D' : 'R'} ahead of projection`}
 				</div>
-				{#if benchmark}<div class="text-muted mt-1 text-xs">
-						Needed {fmtMargin(benchmark.margin, 2)}
-					</div>{/if}
 			</div>{/if}
 		<div class="card p-4">
 			<div class="text-muted text-xs font-medium uppercase">Votes today</div>
@@ -99,12 +91,8 @@
 	<div class="mail-row card mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
 		<div class="flex items-center font-medium">
 			Mail reported today<Info align="left"
-				>Mail returns assigned to this date by the source, including any batch uploads. These are
-				already included in the total early-vote chart's reported line alongside IPEV. They are
-				separate from the in-person counts above. The benchmark is the forecast's remaining-mail
-				margin, which is applied to each projected day. Change it under Advanced to update the
-				comparison. If today's source row disappears or resets to zero, the last nonzero report from
-				today is retained until new counts arrive.</Info
+				>Mail returns the source assigned to today, compared with the projected margin for remaining
+				mail.</Info
 			>
 		</div>
 		{#if mail?.retained}
@@ -117,13 +105,13 @@
 		<span class="num {color(mailMargin ?? 0)}">
 			Lead {mail?.total ? fmtLead(mail.dem - mail.rep) : '-'}
 		</span>
-		<span class="num text-muted">Expected {fmtMargin(mailBenchmark, 2)}</span>
+		<span class="num text-muted">Projected {fmtMargin(mailBenchmark, 2)}</span>
 		<span class="num {color(mailDelta ?? 0)}">
 			{mailDelta === null
-				? 'Vs. forecast: -'
+				? 'Vs. projection: -'
 				: Math.abs(mailDelta) < 0.005
-					? 'On benchmark'
-					: `${Math.abs(mailDelta).toFixed(2)} pts ${mailDelta > 0 ? 'D' : 'R'} ahead of benchmark`}
+					? 'On projection'
+					: `${Math.abs(mailDelta).toFixed(2)} pts ${mailDelta > 0 ? 'D' : 'R'} ahead of projection`}
 		</span>
 	</div>
 </section>
