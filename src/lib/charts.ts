@@ -371,6 +371,7 @@ export type MapMetric = 'total' | 'early' | 'mail' | 'turnout';
 
 export interface MapRow {
 	name: string;
+	title?: string;
 	value: number;
 	lines: { label: string; x: { rep: number; dem: number; total: number } }[];
 	note: string;
@@ -382,7 +383,12 @@ const niceMax = (v: number) => {
 	return Math.ceil(v / step) * step;
 };
 
-export function mapOption(p: Palette, rows: MapRow[], metric: MapMetric): EChartsOption {
+export function mapOption(
+	p: Palette,
+	rows: MapRow[],
+	metric: MapMetric,
+	map = 'florida'
+): EChartsOption {
 	const turnoutMax = niceMax(Math.max(...rows.map((r) => r.value)));
 	const pct = (v: number) => `${turnoutMax < 5 ? v.toFixed(1) : Math.round(v)}%`;
 
@@ -396,7 +402,7 @@ export function mapOption(p: Palette, rows: MapRow[], metric: MapMetric): EChart
 				if (!d) return '';
 				const line = (label: string, x: { rep: number; dem: number; total: number }) =>
 					`<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><span><b style="color:${signColor(p, marginOf(x))}">${fmtMargin(marginOf(x))}</b> <span style="color:${p.muted}">${fmtInt(x.total)}</span></span></div>`;
-				return `<div style="min-width:200px"><div style="font-weight:600;margin-bottom:4px">${d.name}</div>${d.lines.map((l) => line(l.label, l.x)).join('')}<div style="color:${p.muted};font-size:11px;margin-top:4px">${d.note}</div></div>`;
+				return `<div style="min-width:200px"><div style="font-weight:600;margin-bottom:4px">${d.title ?? d.name}</div>${d.lines.map((l) => line(l.label, l.x)).join('')}<div style="color:${p.muted};font-size:11px;margin-top:4px">${d.note}</div></div>`;
 			}
 		},
 		visualMap:
@@ -425,7 +431,7 @@ export function mapOption(p: Palette, rows: MapRow[], metric: MapMetric): EChart
 		series: [
 			{
 				type: 'map',
-				map: 'florida',
+				map,
 				roam: true,
 				scaleLimit: { min: 1, max: 8 },
 				aspectScale: 0.92,
