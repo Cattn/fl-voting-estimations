@@ -8,7 +8,7 @@ import {
 } from '../live.ts';
 import { RESULTS_URL } from '../results.ts';
 import type { FeedData } from '../types.ts';
-import { fetchWithRetry, getFeed, retainTodayMail, SOURCE_URL } from './feed.ts';
+import { carryRegistration, fetchWithRetry, getFeed, retainTodayMail, SOURCE_URL } from './feed.ts';
 import {
 	fetchResults,
 	parseReporting,
@@ -86,6 +86,7 @@ export async function collectElection(
 	const turnout = jobs[0];
 	if (turnout.status === 'fulfilled') {
 		try {
+			turnout.value = carryRegistration(turnout.value, feed);
 			record.warnings.push(...validateTurnout(turnout.value, now));
 			if (feed && Date.parse(turnout.value.fetchedAt) < Date.parse(feed.fetchedAt))
 				throw new Error('Turnout response is older than the saved snapshot');
