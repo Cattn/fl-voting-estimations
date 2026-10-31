@@ -39,17 +39,19 @@ export function extractFeed(html: string): FeedData {
 	return normalizeFeed(raw);
 }
 
+const validRegistration = (n: unknown) =>
+	typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+
 function normalizeFeed(raw: Record<string, unknown>): FeedData {
 	if (!raw.mail || !raw.early || !Number.isFinite(Date.parse(String(raw.fetchedAt))))
 		throw new Error('Source payload is missing cumulative turnout');
 	const counties = ((raw.counties as unknown[]) ?? []).map((c): County => {
 		const o = c as Record<string, unknown>;
-		if (!o.mail || !o.early || typeof o.registered !== 'number' || o.registered <= 0)
-			throw new Error('Source county is missing cumulative turnout or registration');
+		if (!o.mail || !o.early) throw new Error('Source county is missing cumulative turnout');
 		return {
 			code: String(o.code),
 			name: String(o.name),
-			registered: Number(o.registered) || 0,
+			registered: validRegistration(o.registered),
 			mail: party(o.mail),
 			early: party(o.early),
 			...(o.eday ? { eday: party(o.eday) } : {}),
@@ -65,7 +67,7 @@ function normalizeFeed(raw: Record<string, unknown>): FeedData {
 		partial: Boolean(raw.partial),
 		received: typeof raw.received === 'number' ? raw.received : undefined,
 		windowOpen: Boolean(raw.windowOpen),
-		registered: Number(raw.registered) || 0,
+		registered: validRegistration(raw.registered),
 		mail: party(raw.mail),
 		early: party(raw.early),
 		...(raw.eday ? { eday: party(raw.eday) } : {}),
@@ -77,6 +79,18 @@ function normalizeFeed(raw: Record<string, unknown>): FeedData {
 
 	if (!data.mail.total) throw new Error('Source payload is missing mail data');
 	return data;
+}
+
+export function carryRegistration(data: FeedData, previous?: FeedData): FeedData {
+	if (!previous || (data.registered && data.counties.every((c) => c.registered))) return data;
+	const known = new Map(previous.counties.map((c) => [c.code, c.registered]));
+	return {
+		...data,
+		registered: data.registered || previous.registered,
+		counties: data.counties.map((c) =>
+			c.registered ? c : { ...c, registered: known.get(c.code) ?? 0 }
+		)
+	};
 }
 
 export function retainTodayMail(
@@ -132,7 +146,10 @@ export async function fetchWithRetry(): Promise<FeedData> {
 
 async function refresh(): Promise<FeedData> {
 	try {
-		const data = retainTodayMail(await fetchWithRetry(), cache?.data);
+		const data = retainTodayMail(
+			carryRegistration(await fetchWithRetry(), cache?.data),
+			cache?.data
+		);
 		cache = { at: Date.now(), data };
 		return data;
 	} catch (e) {
@@ -148,7 +165,8 @@ export async function refreshSnapshot(): Promise<void> {
 	const started = Date.now();
 	try {
 		const previous = await loadSnapshot();
-		const data = retainTodayMail(await fetchWithRetry(), previous?.data ?? cache?.data);
+		const last = previous?.data ?? cache?.data;
+		const data = retainTodayMail(carryRegistration(await fetchWithRetry(), last), last);
 		const snapshot = { at: Date.now(), data };
 		await saveSnapshot(snapshot);
 		cache = snapshot;

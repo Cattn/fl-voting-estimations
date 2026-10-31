@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFeed } from '../src/lib/server/feed.ts';
+import { carryRegistration, extractFeed } from '../src/lib/server/feed.ts';
 import {
 	buildCtx,
 	buildHistory,
@@ -178,6 +178,17 @@ const countyFeed = () => {
 	});
 	return { ...extractFeed(html), earlyDays };
 };
+
+describe('feed parsing', () => {
+	it('keeps a county with missing registration and carries the last known value', () => {
+		const previous = extractFeed(html);
+		const feed = extractFeed(html.replace('registered:1000', 'registered:0'));
+		expect(feed.counties[0].registered).toBe(0);
+		expect(feed.early.total).toBe(2000);
+		expect(carryRegistration(feed, previous).counties[0].registered).toBe(1000);
+		expect(carryRegistration(feed)).toBe(feed);
+	});
+});
 
 describe('current-day benchmark', () => {
 	it('drops completed dates and re-solves remaining benchmarks after rollover', () => {
