@@ -81,11 +81,11 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
-	{ id: 'strong-r', label: 'Strong R', rep: 0.4075, dem: 0.3225, oth: 0.26 },
-	{ id: 'lean-r', label: 'Lean R', rep: 0.3925, dem: 0.3375, oth: 0.26 },
+	{ id: 'strong-r', label: 'Strong R', rep: 0.4296, dem: 0.3501, oth: 0.283 },
+	{ id: 'lean-r', label: 'Lean R', rep: 0.4033, dem: 0.3522, oth: 0.271 },
 	{ id: 'middle', label: 'Middle', rep: 0.3775, dem: 0.3525, oth: 0.26 },
-	{ id: 'lean-d', label: 'Lean D', rep: 0.3625, dem: 0.3675, oth: 0.26 },
-	{ id: 'strong-d', label: 'Strong D', rep: 0.3475, dem: 0.3825, oth: 0.26 }
+	{ id: 'lean-d', label: 'Lean D', rep: 0.356, dem: 0.3603, oth: 0.252 },
+	{ id: 'strong-d', label: 'Strong D', rep: 0.3348, dem: 0.3665, oth: 0.245 }
 ];
 
 export const DEFAULT_PRESET = 'middle';
@@ -394,6 +394,44 @@ export function edOutcome(s: EdState, turnout: PartyCounts, target: number): EdO
 		sofarMargin: marginOf(s.eday),
 		share: s.eday.total / Math.max(1, s.eday.total + rest.total)
 	};
+}
+
+export interface EdScenario {
+	ed: number;
+	final: number;
+	finalGap: number;
+	tags: ('target' | 'projected')[];
+}
+
+export const SCENARIO_MARGINS = [-5, -10, -15, -20, -25, -30];
+
+export function edScenarios(
+	s: EdState,
+	o: EdOutcome,
+	target: number,
+	projected: number | null = null
+): EdScenario[] {
+	const fixed = addCounts(s.early, s.mail, o.mailLeft);
+	const edTotal = o.final.total - fixed.total;
+	if (edTotal <= 0) return [];
+	const needed = (((target / 100) * o.final.total - gapOf(fixed)) / edTotal) * 100;
+	const tagged: { ed: number; tag: 'target' | 'projected' }[] = [{ ed: needed, tag: 'target' }];
+	if (projected !== null) tagged.push({ ed: projected, tag: 'projected' });
+	const near = (a: number, b: number) => Math.abs(a - b) < 0.05;
+	const rows: { ed: number; tags: ('target' | 'projected')[] }[] = SCENARIO_MARGINS.filter(
+		(m) => !tagged.some((t) => near(t.ed, m))
+	).map((ed) => ({ ed, tags: [] }));
+	for (const t of tagged) {
+		const same = rows.find((r) => r.tags.length && near(r.ed, t.ed));
+		if (same) same.tags.push(t.tag);
+		else rows.push({ ed: t.ed, tags: [t.tag] });
+	}
+	return rows
+		.sort((a, b) => b.ed - a.ed)
+		.map((r) => {
+			const finalGap = gapOf(fixed) + (r.ed / 100) * edTotal;
+			return { ...r, final: (finalGap / o.final.total) * 100, finalGap };
+		});
 }
 
 export const TREND_GAP = 20;

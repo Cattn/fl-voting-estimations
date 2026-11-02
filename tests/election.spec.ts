@@ -5,6 +5,7 @@ import {
 	dayPaths,
 	edOutcome,
 	edProjection,
+	edScenarios,
 	halfHourRows,
 	lateMailRemaining,
 	localMinute,
@@ -269,7 +270,7 @@ describe('Election Day forecasts', () => {
 		expect(path.at(-2)!.margin).not.toBe(path.at(-1)!.margin);
 	});
 
-	it('centers the preset band on R+8.5 from the final early vote, with double digits only at Strong R', () => {
+	it('centers the preset band on R+8.5 from the final early vote, with double digits only at Strong R and turnout from 2.6M to 3.0M', () => {
 		const counts = (rep: number, dem: number, npa: number, oth: number): PartyCounts => ({
 			rep,
 			dem,
@@ -295,6 +296,10 @@ describe('Election Day forecasts', () => {
 		[-10.5, -9.5, -8.5, -7.5, -6.5].forEach((m, i) => expect(finals[i]).toBeCloseTo(m, 0));
 		expect(finals[2]).toBeCloseTo(-8.5, 1);
 		expect(finals.filter((m) => m <= -10)).toHaveLength(1);
+		const sizes = PRESETS.map((p) => presetTurnout(real, p.id).total);
+		for (let i = 1; i < sizes.length; i++) expect(sizes[i]).toBeLessThan(sizes[i - 1]);
+		expect(sizes[0] / 1e6).toBeCloseTo(3.0, 1);
+		expect(sizes[4] / 1e6).toBeCloseTo(2.6, 1);
 
 		const { state } = sampleElection(feed, -530);
 		const margins = PRESETS.map(
@@ -421,6 +426,31 @@ describe('Election Day projection', () => {
 		const far = edProjection(bluer(state));
 		expect(far.weight).toBeGreaterThan(close.weight);
 		expect(far.final.margin).toBeGreaterThan(close.final.margin);
+	});
+});
+
+describe('Election Day margin scenarios', () => {
+	it('marks the row that reaches the target and the projection', () => {
+		const { state } = sampleElection(feed, -530);
+		const p = edProjection(state);
+		const rows = edScenarios(state, p.base, -8.5, p.edMargin);
+		const tagged = rows.find((r) => r.tags.includes('target'))!;
+		expect(tagged.tags).toContain('projected');
+		expect(tagged.final).toBeCloseTo(-8.5, 6);
+		expect(tagged.ed).toBeCloseTo(p.edMargin, 6);
+		expect(rows.map((r) => r.ed)).toEqual([...rows.map((r) => r.ed)].sort((a, b) => b - a));
+	});
+
+	it('moves the target row with turnout and the final', () => {
+		const { state } = sampleElection(feed, -530);
+		const low = edOutcome(state, presetTurnout(state, 'strong-d'), -6);
+		const high = edOutcome(state, presetTurnout(state, 'strong-r'), -6);
+		const at = (o: typeof low) => edScenarios(state, o, -6).find((r) => r.tags.includes('target'))!;
+		expect(at(low).final).toBeCloseTo(-6, 6);
+		expect(at(high).final).toBeCloseTo(-6, 6);
+		expect(at(low).ed).not.toBeCloseTo(at(high).ed, 1);
+		const fixed = edScenarios(state, low, -6).filter((r) => !r.tags.length);
+		for (const r of fixed) expect(r.final).toBeLessThan(0);
 	});
 });
 

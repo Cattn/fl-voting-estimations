@@ -13,6 +13,7 @@
 		DEFAULT_PRESET,
 		edOutcome,
 		edProjection,
+		edScenarios,
 		fmtClock,
 		gapOf,
 		halfHourRows,
@@ -100,6 +101,12 @@
 		)
 	);
 	const rows = $derived(halfHourRows(ed, turnout, target));
+	const scenarios = $derived(
+		custom
+			? edScenarios(ed, outcome, target)
+			: edScenarios(ed, projection.base, DEFAULT_TARGET, projection.edMargin)
+	);
+	const highlight = $derived(custom ? 'target' : 'projected');
 	const evDays = $derived<DailyRow[]>(
 		data.feed.earlyDays.map((d) => ({
 			date: d.date,
@@ -343,6 +350,62 @@
 	{/if}
 {/snippet}
 
+{#snippet scenarioTable()}
+	{#if scenarios.length}
+		<section class="card p-4">
+			<h2 class="mb-3 flex items-center text-base font-semibold">
+				Final by Election Day margin
+				<Info align="right">
+					{#if custom}
+						Final result if all of Election Day lands on each margin, with your selected turnout and
+						early vote, mail and late mail as counted or expected. The shaded row reaches your {fmtMargin(
+							target,
+							1
+						)} final.
+					{:else}
+						Final result if all of Election Day lands on each margin, with projected turnout and
+						early vote, mail and late mail as counted or expected. The shaded row is the projection,
+						and the row with a {fmtMargin(DEFAULT_TARGET, 2)} final shows what Election Day needs to get
+						there.
+					{/if}
+				</Info>
+			</h2>
+			<div class="overflow-x-auto">
+				<table class="num w-full text-sm">
+					<thead>
+						<tr class="text-muted text-xs leading-tight">
+							<th class="pr-2 pb-2 pl-1 text-left align-bottom font-medium">Election Day</th>
+							<th class="pb-2 pl-3 text-right align-bottom font-medium">Final margin</th>
+							<th class="pb-2 pl-3 text-right align-bottom font-medium">Final lead</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each scenarios as s (s.ed)}
+							<tr
+								class="border-t"
+								style:border-color="var(--border)"
+								style:background={s.tags.includes(highlight) ? 'var(--wash)' : undefined}
+							>
+								<td class="py-2 pr-2 pl-1 font-medium whitespace-nowrap {marginClass(s.ed)}">
+									{fmtMargin(s.ed, s.tags.length ? 2 : 0)}
+								</td>
+								<td
+									class="py-2 pl-3 text-right font-semibold whitespace-nowrap {marginClass(
+										s.final
+									)}"
+								>
+									{fmtMargin(s.final, 2)}
+								</td>
+								<td class="py-2 pl-3 text-right whitespace-nowrap">{fmtLead(s.finalGap)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{/if}
+{/snippet}
+
 {#snippet recap()}
 	<details class="card p-4">
 		<summary class="cursor-pointer text-base font-semibold">Early voting recap</summary>
@@ -466,6 +529,7 @@
 				{@render dayChart()}
 			{/if}
 			{@render partyTable()}
+			{@render scenarioTable()}
 			{@render halfHours()}
 		</div>
 	</div>
@@ -562,7 +626,10 @@
 					{@render fixedRows()}
 				</section>
 			</div>
-			{@render halfHours()}
+			<div class="flex min-w-0 flex-col gap-6">
+				{@render scenarioTable()}
+				{@render halfHours()}
+			</div>
 		</div>
 		{@render recap()}
 	</div>
