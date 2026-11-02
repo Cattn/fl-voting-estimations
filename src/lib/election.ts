@@ -1,4 +1,4 @@
-import { ELECTION_DAY, marginOf, REGISTRATION } from './model.ts';
+import { DEFAULT_TARGET, ELECTION_DAY, marginOf, REGISTRATION } from './model.ts';
 import type { County, PartyCounts } from './types.ts';
 
 export type Phase = 'pre' | 'open' | 'closed';
@@ -81,11 +81,11 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
-	{ id: 'strong-r', label: 'Strong R', rep: 0.47, dem: 0.265, oth: 0.26 },
-	{ id: 'lean-r', label: 'Lean R', rep: 0.44, dem: 0.28, oth: 0.265 },
-	{ id: 'middle', label: 'Middle', rep: 0.41, dem: 0.295, oth: 0.27 },
-	{ id: 'lean-d', label: 'Lean D', rep: 0.38, dem: 0.31, oth: 0.275 },
-	{ id: 'strong-d', label: 'Strong D', rep: 0.34, dem: 0.32, oth: 0.28 }
+	{ id: 'strong-r', label: 'Strong R', rep: 0.41, dem: 0.32, oth: 0.26 },
+	{ id: 'lean-r', label: 'Lean R', rep: 0.395, dem: 0.335, oth: 0.26 },
+	{ id: 'middle', label: 'Middle', rep: 0.38, dem: 0.35, oth: 0.26 },
+	{ id: 'lean-d', label: 'Lean D', rep: 0.365, dem: 0.365, oth: 0.26 },
+	{ id: 'strong-d', label: 'Strong D', rep: 0.35, dem: 0.38, oth: 0.26 }
 ];
 
 export const DEFAULT_PRESET = 'middle';
@@ -309,7 +309,6 @@ export function turnoutEstimates(s: EdState): TurnoutEstimates {
 		influence += countyPriors[i].total * weight;
 		coverage += votes.total && share > 0 ? countyPriors[i].total * freshness : 0;
 		const remaining = { ...ZERO };
-		const liveRemaining = { ...ZERO };
 		const complete = s.completedCounties?.includes(c.code) ?? false;
 		const pending = s.phase === 'closed' && s.turnoutFinal === false && !complete;
 		for (const k of turnoutKeys) {
@@ -320,13 +319,8 @@ export function turnoutEstimates(s: EdState): TurnoutEstimates {
 				complete || (share >= 1 && validTime && !pending)
 					? 0
 					: weight * paceLeft + (1 - weight) * priorLeft;
-			liveRemaining[k] = complete
-				? 0
-				: votes.total && share >= 0.05 && validTime
-					? paceLeft
-					: priorLeft;
 		}
-		return { remaining, liveRemaining, uncertainty: 1 - 0.75 * weight + 4 * instability * weight };
+		return { remaining, uncertainty: 1 - 0.75 * weight + 4 * instability * weight };
 	});
 	const presets = priors.map((p) => {
 		const turnout = { ...observed };
@@ -340,7 +334,7 @@ export function turnoutEstimates(s: EdState): TurnoutEstimates {
 		return { id: p.id, turnout: bound(turnout) };
 	});
 	const live = { ...observed };
-	for (const k of turnoutKeys) live[k] += residuals.reduce((sum, r) => sum + r.liveRemaining[k], 0);
+	for (const k of turnoutKeys) live[k] += residuals.reduce((sum, r) => sum + r.remaining[k], 0);
 	return {
 		live: { turnout: bound(live), weight: clamp(influence / Math.max(1, middle.total)) },
 		presets,
@@ -399,6 +393,42 @@ export function edOutcome(s: EdState, turnout: PartyCounts, target: number): EdO
 		restMargin: marginOf(rest),
 		sofarMargin: marginOf(s.eday),
 		share: s.eday.total / Math.max(1, s.eday.total + rest.total)
+	};
+}
+
+export const TREND_GAP = 20;
+
+export interface EdProjection {
+	base: EdOutcome;
+	trend: number | null;
+	weight: number;
+	restMargin: number;
+	edMargin: number;
+	edTotal: number;
+	final: { total: number; gap: number; margin: number };
+}
+
+export function edProjection(s: EdState, target = DEFAULT_TARGET): EdProjection {
+	const base = edOutcome(s, turnoutEstimates(s).live.turnout, target);
+	const bounded = (v: number) => Math.max(-100, Math.min(100, v));
+	const needed = bounded(base.needed ?? 0);
+	const trend = s.eday.total && base.rest.total ? bounded(base.restMargin) : null;
+	const weight =
+		trend === null ? 0 : clamp(base.share * (1 + Math.abs(needed - trend) / TREND_GAP));
+	const restMargin = trend === null ? needed : needed + (trend - needed) * weight;
+	const restGap = (base.rest.total * restMargin) / 100;
+	const known = addCounts(s.early, s.mail, base.mailLeft, s.eday);
+	const total = known.total + base.rest.total;
+	const gap = gapOf(known) + restGap;
+	const edTotal = s.eday.total + base.rest.total;
+	return {
+		base,
+		trend,
+		weight,
+		restMargin,
+		edMargin: edTotal ? ((gapOf(s.eday) + restGap) / edTotal) * 100 : 0,
+		edTotal,
+		final: { total, gap, margin: total ? (gap / total) * 100 : 0 }
 	};
 }
 

@@ -65,20 +65,6 @@
 	const signed = (v: number) => `${v > 0 ? 'D' : 'R'} +${Math.abs(v).toFixed(1)}`;
 </script>
 
-{#if !started}
-	<section class="card mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
-		<div>
-			<h2 class="text-base font-semibold">Results at 8 PM ET</h2>
-			<p class="text-muted text-sm">
-				Counties post early and mail ballots first, once the panhandle closes at 8 PM ET, then
-				Election Day precincts through the night. Unofficial results from the Florida Department of
-				State.
-			</p>
-		</div>
-		<span class="text-2 text-sm">Governor · U.S. Senate · Cabinet · 3 amendments</span>
-	</section>
-{/if}
-
 <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
 	<div>
 		<h2 class="text-lg font-semibold">Statewide results</h2>
@@ -92,6 +78,15 @@
 		>
 	{/if}
 </div>
+
+{#if !started}
+	<section class="card mb-4 p-4">
+		<h3 class="font-semibold">Results at 8 PM ET</h3>
+		<p class="text-muted text-sm">
+			Early and mail ballots post first, then Election Day precincts through the night.
+		</p>
+	</section>
+{/if}
 
 <div class="race-tabs mb-4 flex flex-wrap gap-1" role="tablist" aria-label="Race">
 	{#each tabs as t (t.race)}
