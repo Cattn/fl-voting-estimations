@@ -202,7 +202,7 @@ export function projectRace(
 export interface District {
 	n: number;
 	trump24: number;
-	uncontested?: boolean;
+	uncontested?: { party: 'REP' | 'DEM'; name: string };
 }
 
 export const DISTRICTS: District[] = [
@@ -215,7 +215,7 @@ export const DISTRICTS: District[] = [
 	{ n: 7, trump24: 12.42 },
 	{ n: 8, trump24: 16.14 },
 	{ n: 9, trump24: 17.71 },
-	{ n: 10, trump24: -23.89 },
+	{ n: 10, trump24: -23.89, uncontested: { party: 'DEM', name: 'Maxwell Frost' } },
 	{ n: 11, trump24: 15.63 },
 	{ n: 12, trump24: 15.33 },
 	{ n: 13, trump24: 13.26 },

@@ -16,11 +16,10 @@ import {
 	type EdState
 } from '../../src/lib/election.ts';
 import { marginOf } from '../../src/lib/model.ts';
-import { DISTRICTS as districts, type ResultRow } from '../../src/lib/results.ts';
+import { DISTRICTS, type ResultRow } from '../../src/lib/results.ts';
 import type { County, FeedData, PartyCounts } from '../../src/lib/types.ts';
 
 const EV_FINAL = { early: 3_400_000, mail: 1_870_000 };
-const DISTRICTS = districts.map((district) => ({ ...district, uncontested: district.n === 10 }));
 const TRUE_SHARES = PRESETS.find((p) => p.id === DEFAULT_PRESET)!;
 const ED_MIDNIGHT_UTC = Date.UTC(2026, 10, 3, 5, 0);
 

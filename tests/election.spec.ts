@@ -4,6 +4,7 @@ import {
 	dayShare,
 	dayPaths,
 	edOutcome,
+	edProjection,
 	halfHourRows,
 	lateMailRemaining,
 	localMinute,
@@ -20,6 +21,8 @@ import {
 	ZERO
 } from '../src/lib/election.ts';
 import { marginOf } from '../src/lib/model.ts';
+import { ELECTION_REGISTRATION } from '../src/lib/live.ts';
+import { electionNotice, type ElectionView } from '../src/lib/view-election.ts';
 import {
 	closestDistricts,
 	districtResults,
@@ -131,18 +134,26 @@ describe('Election Day preview', () => {
 });
 
 describe('Election Day forecasts', () => {
-	it('uses observed county pace for Live instead of a selected turnout scenario', () => {
-		const state = sampleElection(feed, 870).state;
-		const expected = addCounts(
-			...state.counties.map((c) =>
-				scaleCounts(c.eday!, 1 / dayShare(localMinute(c.code, minuteOfDay(c.updated!))))
-			)
+	it('moves Live from the Middle starting turnout toward observed county pace', () => {
+		const pace = (state: EdState) =>
+			addCounts(
+				...state.counties.map((c) =>
+					scaleCounts(c.eday!, 1 / dayShare(localMinute(c.code, minuteOfDay(c.updated!))))
+				)
+			);
+		const start = liveTurnout(sampleElection(feed, POLLS_OPEN).state).turnout;
+		const gap = (minute: number) => {
+			const state = sampleElection(feed, minute).state;
+			return Math.abs(liveTurnout(state).turnout.rep - pace(state).rep);
+		};
+		const morning = sampleElection(feed, 9 * 60).state;
+		expect(Math.abs(liveTurnout(morning).turnout.rep - start.rep)).toBeLessThan(
+			Math.abs(pace(morning).rep - start.rep)
 		);
+		expect(gap(18 * 60)).toBeLessThan(gap(9 * 60));
+		const state = sampleElection(feed, 870).state;
 		const live = liveTurnout(state);
-		expect(live.turnout.rep).toBeCloseTo(expected.rep, 6);
-		expect(live.turnout.dem).toBeCloseTo(expected.dem, 6);
-		expect(live.turnout.npa).toBeCloseTo(expected.npa + expected.oth, 6);
-		expect(live.turnout).not.toEqual(presetTurnout(state, 'middle'));
+		expect(live.turnout).toEqual(presetTurnout(state, 'middle'));
 		for (const preset of PRESETS) {
 			presetTurnout(state, preset.id);
 			expect(liveTurnout(state)).toEqual(live);
@@ -258,15 +269,38 @@ describe('Election Day forecasts', () => {
 		expect(path.at(-2)!.margin).not.toBe(path.at(-1)!.margin);
 	});
 
-	it('centers the preset band on a Republican turnout advantage while preserving favorable Democratic scenarios', () => {
+	it('centers the preset band on R+8.5 from the final early vote, with double digits only at Strong R', () => {
+		const counts = (rep: number, dem: number, npa: number, oth: number): PartyCounts => ({
+			rep,
+			dem,
+			npa,
+			oth,
+			total: rep + dem + npa + oth
+		});
+		const real: EdState = {
+			minute: -60,
+			phase: 'pre',
+			counties: [],
+			early: counts(1_497_769, 1_210_795, 668_220, 91_022),
+			mail: counts(681_740, 836_547, 384_794, 48_019),
+			evMail: counts(678_744, 832_584, 382_193, 47_790),
+			eday: ZERO,
+			history: [],
+			registration: ELECTION_REGISTRATION,
+			lateMailEstimate: true
+		};
+		const finals = PRESETS.map(
+			(p) => edOutcome(real, presetTurnout(real, p.id), -8.5).final.margin
+		);
+		[-10.5, -9.5, -8.5, -7.5, -6.5].forEach((m, i) => expect(finals[i]).toBeCloseTo(m, 0));
+		expect(finals[2]).toBeCloseTo(-8.5, 1);
+		expect(finals.filter((m) => m <= -10)).toHaveLength(1);
+
 		const { state } = sampleElection(feed, -530);
 		const margins = PRESETS.map(
 			(p) => edOutcome(state, presetTurnout(state, p.id), -8.5).final.margin
 		);
 		for (let i = 1; i < margins.length; i++) expect(margins[i]).toBeGreaterThan(margins[i - 1]);
-		expect(margins[2]).toBeLessThan(-10);
-		expect(margins[2]).toBeGreaterThan(-14);
-		expect(margins.at(-1)).toBeLessThan(0);
 		const final = sampleElection(feed, 1430).state;
 		expect(marginOf(addCounts(final.early, final.mail, final.eday))).toBeCloseTo(margins[2], 1);
 	});
@@ -349,5 +383,74 @@ describe('results and closest districts', () => {
 		expect(
 			final.filter((r) => r.race).every((r) => r.projected === r.margin && r.range === 0.5)
 		).toBe(true);
+	});
+});
+
+describe('Election Day projection', () => {
+	const swap = (c: PartyCounts): PartyCounts => ({ ...c, rep: c.dem, dem: c.rep });
+	const bluer = (state: EdState): EdState => ({
+		...state,
+		eday: swap(state.eday),
+		counties: state.counties.map((c) => ({ ...c, eday: c.eday && swap(c.eday) }))
+	});
+
+	it('holds the default final before any Election Day votes', () => {
+		const { state } = sampleElection(feed, -530);
+		const p = edProjection(state);
+		expect(p.weight).toBe(0);
+		expect(p.trend).toBeNull();
+		expect(p.final.margin).toBeCloseTo(-8.5, 6);
+		expect(p.restMargin).toBeCloseTo(p.base.needed!, 6);
+	});
+
+	it('leans toward the live trend as more of the day is counted', () => {
+		const morning = edProjection(sampleElection(feed, 9 * 60).state);
+		const evening = edProjection(sampleElection(feed, 18 * 60 + 30).state);
+		expect(morning.weight).toBeGreaterThan(0);
+		expect(evening.weight).toBeGreaterThan(morning.weight);
+		for (const p of [morning, evening]) {
+			const [lo, hi] = [Math.min(p.trend!, p.base.needed!), Math.max(p.trend!, p.base.needed!)];
+			expect(p.restMargin).toBeGreaterThanOrEqual(lo - 1e-9);
+			expect(p.restMargin).toBeLessThanOrEqual(hi + 1e-9);
+		}
+	});
+
+	it('converges faster when the target is far from the trend', () => {
+		const { state } = sampleElection(feed, 12 * 60);
+		const close = edProjection(state);
+		const far = edProjection(bluer(state));
+		expect(far.weight).toBeGreaterThan(close.weight);
+		expect(far.final.margin).toBeGreaterThan(close.final.margin);
+	});
+});
+
+describe('Election Day notice', () => {
+	const source = { url: '', checkedAt: 0, acceptedAt: 1, updatedAt: null, error: null };
+	const view = (minute: number, warnings: string[], resultsError: string | null = null) =>
+		({
+			state: { minute },
+			warnings,
+			sources: {
+				turnout: source,
+				results: { ...source, error: resultsError },
+				reporting: source
+			}
+		}) as unknown as ElectionView;
+	const warnings = [
+		'Turnout source is still updating (64/67 counties); turnout projections are paused.',
+		'Turnout source is still updating (64/67 counties); turnout projections are paused.',
+		'The end-of-early-voting mail baseline is unavailable; late-mail estimates are paused.',
+		'Turnout source is still updating (64/67 counties). Turnout projections are paused.',
+		'results: Results response is older than the saved snapshot. Last accepted data is retained.'
+	];
+
+	it('folds every warning into one short line', () => {
+		expect(electionNotice(view(600, warnings, 'stale'))).toBe(
+			'Turnout source updating (64/67 counties) · Late-mail estimate paused'
+		);
+		expect(electionNotice(view(RESULTS_START + 30, warnings, 'stale'))).toBe(
+			'Turnout source updating (64/67 counties) · Late-mail estimate paused · Results data delayed · result projections paused'
+		);
+		expect(electionNotice(view(600, []))).toBeNull();
 	});
 });

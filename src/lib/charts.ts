@@ -461,12 +461,16 @@ export interface DayLine {
 export function edDayChartOption(
 	p: Palette,
 	lines: { reported: DayLine[]; path: DayLine[]; live: DayLine[] },
-	target: number,
-	selected: Record<string, boolean> = {}
+	target: number | null,
+	selected: Record<string, boolean> = {},
+	names = { path: 'Path to target', live: 'Selected turnout' }
 ): EChartsOption {
 	const all = [...lines.reported, ...lines.path, ...lines.live].map((d) => d.margin);
-	const lo = Math.floor(Math.min(target, ...all) - 0.6);
-	const hi = Math.ceil(Math.max(target, ...all) + 0.6);
+	if (target !== null) all.push(target);
+	if (!all.length) all.push(0);
+	const lo = Math.floor(Math.min(...all) - 0.6);
+	const hi = Math.ceil(Math.max(...all) + 0.6);
+	const tone = signColor(p, target ?? all[0]);
 	const pts = (rows: DayLine[]) => rows.map((d) => [d.minute, d.margin]);
 	const series = (
 		name: string,
@@ -533,17 +537,21 @@ export function edDayChartOption(
 		},
 		series: [
 			{
-				...series('Reported', pts(lines.reported), 'solid', signColor(p, target), 2.5, true),
+				...series('Reported', pts(lines.reported), 'solid', tone, 2.5, true),
 				markLine: {
 					silent: true,
 					symbol: 'none',
 					label: { color: p.ink2, fontSize: 11, position: 'insideStartTop' },
 					data: [
-						{
-							yAxis: target,
-							lineStyle: { color: p.ink2, type: [2, 3], width: 1 },
-							label: { formatter: `Target ${fmtMargin(target, 2)}` }
-						},
+						...(target === null
+							? []
+							: [
+									{
+										yAxis: target,
+										lineStyle: { color: p.ink2, type: [2, 3], width: 1 },
+										label: { formatter: `Target ${fmtMargin(target, 2)}` }
+									}
+								]),
 						{
 							xAxis: 19 * 60,
 							lineStyle: { color: p.axis, type: [3, 3] },
@@ -557,8 +565,8 @@ export function edDayChartOption(
 					]
 				}
 			},
-			series('Path to target', pts(lines.path), [9, 6], signColor(p, target), 2, false),
-			series('Selected turnout', pts(lines.live), [0.1, 5], p.ink2, 2.5, false)
+			series(names.path, pts(lines.path), [9, 6], tone, 2, false),
+			series(names.live, pts(lines.live), [0.1, 5], p.ink2, 2.5, false)
 		]
 	} as EChartsOption;
 }
