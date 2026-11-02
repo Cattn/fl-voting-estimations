@@ -17,6 +17,7 @@
 		gapOf,
 		halfHourRows,
 		LATE_MAIL,
+		lateMailRemaining,
 		notYetVoted,
 		PRESETS,
 		scaleCounts,
@@ -65,6 +66,7 @@
 	const rate = (votes: number, of: number) => `${of ? Math.round((votes / of) * 100) : 0}%`;
 
 	const total = $derived(addCounts(ed.early, ed.mail, ed.eday));
+	const lateMail = $derived(lateMailRemaining(ed));
 	const mailSince = $derived(addCounts(ed.mail, scaleCounts(ed.evMail, -1)));
 	const pool = $derived(notYetVoted(ed));
 	const expected = $derived(custom ? outcome.turnout : projection.base.turnout);
@@ -214,11 +216,11 @@
 		>
 	</div>
 	<div class="flex justify-between">
-		<span class="text-muted">Late mail expected</span>
+		<span class="text-muted">Late mail still expected</span>
 		<span class="text-dem"
 			>{ed.lateMailEstimate === false
 				? '-'
-				: `~${fmtInt(LATE_MAIL.total / 1000)}k · ${fmtMargin(LATE_MAIL.margin)}`}</span
+				: `~${fmtInt(lateMail.total / 1000)}k · ${fmtMargin(LATE_MAIL.margin)}`}</span
 		>
 	</div>
 {/snippet}

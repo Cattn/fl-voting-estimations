@@ -117,7 +117,7 @@ export function sampleElection(feed: FeedData, minute: number): Sample {
 		dem: pool.dem * TRUE_SHARES.dem,
 		npa: pool.oth * TRUE_SHARES.oth
 	};
-	const lateMix = mix(1, 0.365, 0.475);
+	const lateMix = mix(1, 0.42 - LATE_MAIL.margin / 200, 0.42 + LATE_MAIL.margin / 200);
 	const countyFull = (c: County): PartyCounts => {
 		const w = (k: 'rep' | 'dem') => (early[k] ? c.early[k] / early[k] : 0);
 		const o = early.npa + early.oth ? (c.early.npa + c.early.oth) / (early.npa + early.oth) : 0;

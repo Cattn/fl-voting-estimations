@@ -27,8 +27,10 @@
 	const status = $derived(
 		ed.phase === 'pre'
 			? data.serverClock.date < ELECTION_DAY
-				? 'Election Day · Tue, Nov 3'
-				: 'Polls open 7 AM ET'
+				? Math.floor(data.minute / 1440) === -1
+					? 'Polls open tomorrow at 7 AM ET'
+					: 'Polls open Tue, Nov 3 at 7 AM ET'
+				: 'Polls open at 7 AM ET'
 			: ed.phase === 'open'
 				? `Live · ${fmtClock(data.minute)} ET · ${reporting}/67 counties`
 				: ed.turnoutFinal
