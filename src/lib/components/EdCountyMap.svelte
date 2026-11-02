@@ -11,12 +11,12 @@
 	let { counties }: { counties: County[] } = $props();
 
 	type View = 'all' | 'eday' | 'early' | 'mail' | 'turnout';
-	const views: { id: View; label: string }[] = [
+	const allViews: { id: View; label: string }[] = [
 		{ id: 'all', label: 'All votes' },
-		{ id: 'eday', label: 'Election Day only' },
+		{ id: 'eday', label: 'Election Day' },
 		{ id: 'early', label: 'IPEV' },
 		{ id: 'mail', label: 'Mail' },
-		{ id: 'turnout', label: 'Turnout %' }
+		{ id: 'turnout', label: 'Turnout' }
 	];
 
 	let view = $state<View>('all');
@@ -65,6 +65,8 @@
 		[...rows].sort((a, b) => b.eday.total - a.eday.total || b.all.total - a.all.total)
 	);
 	const waiting = $derived(rows.filter((r) => !r.eday.total).length);
+	const started = $derived(waiting < rows.length);
+	const views = $derived(started ? allViews : allViews.filter((v) => v.id !== 'eday'));
 	const marginClass = (v: number) => (v < 0 ? 'text-rep' : 'text-dem');
 
 	onMount(async () => {
@@ -78,13 +80,12 @@
 	});
 </script>
 
-<div class="mb-3 flex flex-wrap gap-1" role="group" aria-label="Map measure">
+<div class="seg mb-3" role="group" aria-label="Map view">
 	{#each views as v (v.id)}
-		<button
-			class="btn"
-			class:btn-primary={view === v.id}
-			aria-pressed={view === v.id}
-			onclick={() => (view = v.id)}>{v.label}</button
+		<button type="button" aria-pressed={view === v.id} onclick={() => (view = v.id)}
+			>{#if v.id === 'eday'}<span class="max-md:hidden">Election Day</span><span class="md:hidden"
+					>ED</span
+				>{:else}{v.label}{/if}</button
 		>
 	{/each}
 </div>
@@ -102,30 +103,34 @@
 {/if}
 
 <div class="mt-4 overflow-x-auto">
-	<table class="num w-full text-sm" style:min-width="640px">
+	<table class="num w-full text-sm" style:min-width={started ? '560px' : '320px'}>
 		<thead>
 			<tr class="text-muted text-left text-xs">
 				<th class="pb-2 font-medium">County</th>
-				<th class="pb-2 pl-3 text-right font-medium">ED so far</th>
-				<th class="pb-2 pl-3 text-right font-medium">ED margin</th>
+				{#if started}
+					<th class="pb-2 pl-3 text-right font-medium">ED votes</th>
+					<th class="pb-2 pl-3 text-right font-medium">ED margin</th>
+				{/if}
 				<th class="pb-2 pl-3 text-right font-medium">All votes</th>
 				<th class="pb-2 pl-3 text-right font-medium">Turnout</th>
-				<th class="pb-2 pl-3 text-right font-medium">Updated</th>
+				{#if started}<th class="pb-2 pl-3 text-right font-medium">Updated</th>{/if}
 			</tr>
 		</thead>
 		<tbody>
 			{#each showAll ? sorted : sorted.slice(0, 10) as r (r.code)}
 				<tr class="border-t" style:border-color="var(--border)">
 					<td class="py-1.5">{r.name}</td>
-					<td class="pl-3 text-right">{r.eday.total ? fmtInt(r.eday.total) : '-'}</td>
-					<td class="pl-3 text-right {marginClass(marginOf(r.eday))}"
-						>{r.eday.total ? fmtMargin(marginOf(r.eday)) : '-'}</td
-					>
+					{#if started}
+						<td class="pl-3 text-right">{r.eday.total ? fmtInt(r.eday.total) : '-'}</td>
+						<td class="pl-3 text-right {marginClass(marginOf(r.eday))}"
+							>{r.eday.total ? fmtMargin(marginOf(r.eday)) : '-'}</td
+						>
+					{/if}
 					<td class="pl-3 text-right {marginClass(marginOf(r.all))}"
 						>{fmtMargin(marginOf(r.all))}</td
 					>
 					<td class="pl-3 text-right">{r.turnout.toFixed(1)}%</td>
-					<td class="text-muted pl-3 text-right">{r.updated ?? 'Not yet'}</td>
+					{#if started}<td class="text-muted pl-3 text-right">{r.updated ?? '-'}</td>{/if}
 				</tr>
 			{/each}
 		</tbody>
@@ -134,9 +139,8 @@
 		<button class="btn" onclick={() => (showAll = !showAll)}>
 			{showAll ? 'Show top 10' : `Show all ${sorted.length} counties`}
 		</button>
-		{#if waiting}<span class="text-muted text-xs"
-				>{waiting}
-				{waiting === 1 ? 'county has' : 'counties have'} not reported Election Day turnout</span
+		{#if started && waiting}<span class="text-muted text-xs"
+				>{waiting} {waiting === 1 ? 'county' : 'counties'} not reporting yet</span
 			>{/if}
 	</div>
 </div>

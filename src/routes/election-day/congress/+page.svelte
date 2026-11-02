@@ -34,10 +34,16 @@
 		mix.total && remaining.total > 1000 ? marginOf(remaining) - marginOf(mix) : 0
 	);
 	const rows = $derived(districtResults(races, data.election.projectable ? drift : 0));
-	const reported = $derived(rows.filter((r) => r.race?.total));
+	const reported = $derived(rows.filter((r) => !r.district.uncontested && r.race?.total));
 	const watch = $derived(closestDistricts(rows));
-	const repSeats = $derived(reported.filter((r) => r.margin < 0).length);
-	const demSeats = $derived(reported.filter((r) => r.margin > 0).length);
+	const unopposed = (party: 'REP' | 'DEM') =>
+		rows.filter((r) => r.district.uncontested?.party === party).length;
+	const repSeats = $derived(reported.filter((r) => r.margin < 0).length + unopposed('REP'));
+	const demSeats = $derived(reported.filter((r) => r.margin > 0).length + unopposed('DEM'));
+	const avgShift = $derived(
+		reported.length ? reported.reduce((n, r) => n + r.shift, 0) / reported.length : null
+	);
+	const partyColor = (party: 'REP' | 'DEM') => (party === 'REP' ? 'var(--rep)' : 'var(--dem)');
 	const close = $derived(reported.filter((r) => Math.abs(r.margin) < 5).length);
 	const popular = $derived({
 		rep: reported.reduce((n, r) => n + lead(r.race!.candidates, 'REP'), 0),
@@ -48,6 +54,8 @@
 	const pct = (votes: number, r: DistrictResult) =>
 		r.race?.total ? (votes / r.race.total) * 100 : 0;
 	const tileColor = (r: DistrictResult) => {
+		if (r.district.uncontested)
+			return `color-mix(in srgb, ${partyColor(r.district.uncontested.party)} 95%, var(--surface))`;
 		if (!r.race?.total) return 'var(--wash)';
 		if (view === 'counted')
 			return `color-mix(in srgb, var(--ink-2) ${20 + r.counted * 65}%, var(--surface))`;
@@ -65,7 +73,9 @@
 {#if !reported.length}
 	<section class="card mb-4 p-4">
 		<h3 class="font-semibold">Results at 8 PM ET</h3>
-		<p class="text-muted text-sm">District results appear here as votes are counted.</p>
+		<p class="text-muted text-sm">
+			Early and mail ballots post first, then Election Day precincts through the night.
+		</p>
 	</section>
 {/if}
 
@@ -85,12 +95,18 @@
 			{#each rows as r (r.district.n)}
 				<div
 					class="h-4 min-w-0 flex-1 rounded-sm"
-					style:background={r.race?.total && r.margin !== 0
-						? r.margin < 0
-							? 'var(--rep)'
-							: 'var(--dem)'
-						: 'var(--wash)'}
-					title="FL-{r.district.n}: {r.race?.total ? fmtMargin(r.margin) : 'No votes yet'}"
+					style:background={r.district.uncontested
+						? partyColor(r.district.uncontested.party)
+						: r.race?.total && r.margin !== 0
+							? r.margin < 0
+								? 'var(--rep)'
+								: 'var(--dem)'
+							: 'var(--wash)'}
+					title="FL-{r.district.n}: {r.district.uncontested
+						? `${r.district.uncontested.name}, uncontested`
+						: r.race?.total
+							? fmtMargin(r.margin)
+							: 'No votes yet'}"
 				></div>
 			{/each}
 		</div>
@@ -114,12 +130,16 @@
 	<section class="card p-4">
 		<div class="text-muted flex items-center text-xs font-medium tracking-wide uppercase">
 			Avg. shift vs. 2024 Pres.<Info align="right"
-				>Unweighted average across districts reporting votes. Historical comparisons require
-				verified 2024 results on the 2026 district lines.</Info
+				>Average change from the 2024 presidential margin on the 2026 lines, across contested
+				districts reporting votes.</Info
 			>
 		</div>
-		<div class="num mt-1 text-2xl font-semibold">–</div>
-		<p class="text-2 text-sm">Awaiting verified 2026-boundary baselines</p>
+		<div class="num mt-1 text-2xl font-semibold {avgShift === null ? '' : marginClass(avgShift)}">
+			{avgShift === null ? '–' : `${avgShift < 0 ? 'R' : 'D'} +${Math.abs(avgShift).toFixed(1)}`}
+		</div>
+		<p class="text-2 text-sm">
+			{avgShift === null ? 'Once districts report' : `${reported.length} districts reporting`}
+		</p>
 	</section>
 </div>
 
@@ -197,21 +217,25 @@
 				<div class="flex flex-wrap justify-between gap-1">
 					<b>FL-{r.district.n}</b>
 					<span
-						>{!r.race?.total
-							? '–'
-							: view === 'counted'
-								? `${Math.round(r.counted * 100)}%`
-								: fmtMargin(r.margin, 1)}</span
+						>{r.district.uncontested
+							? 'Unc.'
+							: !r.race?.total
+								? '–'
+								: view === 'counted'
+									? `${Math.round(r.counted * 100)}%`
+									: fmtMargin(r.margin, 1)}</span
 					>
 				</div>
 				<div class="mt-1 truncate text-xs">
-					{!r.race?.total
-						? 'No votes yet'
-						: r.margin === 0
-							? 'Tied'
-							: r.margin < 0
-								? r.rep?.name
-								: r.dem?.name}
+					{r.district.uncontested
+						? r.district.uncontested.name
+						: !r.race?.total
+							? 'No votes yet'
+							: r.margin === 0
+								? 'Tied'
+								: r.margin < 0
+									? r.rep?.name
+									: r.dem?.name}
 				</div>
 			</a>
 		{/each}
@@ -224,9 +248,8 @@
 <section class="card p-4">
 	<h2 class="mb-3 flex items-center text-base font-semibold">
 		Results by district<Info align="left"
-			>Candidate votes include voters of every registration. County turnout cannot supply a
-			registration breakdown within split congressional districts. Historical comparisons require
-			verified results on the same district lines.</Info
+			>Candidate votes include voters of every registration. 2024 Pres. is the 2024 presidential
+			margin on the 2026 lines; Shift is the change from it.</Info
 		>
 	</h2>
 	<div class="overflow-x-auto">
@@ -252,23 +275,45 @@
 					>
 						<td class="py-2 align-top font-medium">FL-{r.district.n}</td>
 						{#each [r.rep, r.dem] as c, i (i)}
+							{@const unopposed =
+								r.district.uncontested?.party === (i === 0 ? 'REP' : 'DEM')
+									? r.district.uncontested
+									: null}
 							<td class="pl-3 align-top">
 								<div class={i === 0 ? 'text-rep' : 'text-dem'}>
-									{c?.name ?? '–'}
+									{unopposed?.name ?? c?.name ?? '–'}
 								</div>
 								<div class="text-muted text-xs">
-									{r.race?.total && c ? `${fmtInt(c.votes)} · ${pct(c.votes, r).toFixed(1)}%` : '–'}
+									{unopposed
+										? 'Uncontested'
+										: r.race?.total && c
+											? `${fmtInt(c.votes)} · ${pct(c.votes, r).toFixed(1)}%`
+											: '–'}
 								</div>
 							</td>
 						{/each}
-						<td class="pl-3 text-right {r.race?.total ? marginClass(r.margin) : ''}"
-							>{r.race?.total ? fmtMargin(r.margin, 1) : '–'}</td
+						{#if r.district.uncontested}
+							<td class="pl-3 text-right">Unc.</td>
+							<td class="pl-3 text-right">–</td>
+						{:else}
+							<td class="pl-3 text-right {r.race?.total ? marginClass(r.margin) : ''}"
+								>{r.race?.total ? fmtMargin(r.margin, 1) : '–'}</td
+							>
+							<td class="pl-3 text-right"
+								>{r.race?.total ? `${Math.round(r.counted * 100)}%` : '–'}</td
+							>
+						{/if}
+						<td class="pl-3 text-right {marginClass(-r.district.trump24)}"
+							>{fmtMargin(-r.district.trump24, 1)}</td
 						>
-						<td class="pl-3 text-right"
-							>{r.race?.total ? `${Math.round(r.counted * 100)}%` : '–'}</td
+						<td
+							class="pl-3 text-right {r.race?.total && !r.district.uncontested
+								? marginClass(r.shift)
+								: ''}"
+							>{r.race?.total && !r.district.uncontested
+								? `${r.shift < 0 ? 'R' : 'D'} +${Math.abs(r.shift).toFixed(1)}`
+								: '–'}</td
 						>
-						<td class="pl-3 text-right">–</td>
-						<td class="pl-3 text-right">–</td>
 						<td
 							class="pl-3 text-right whitespace-nowrap {r.race?.total
 								? marginClass(r.projected)
@@ -285,10 +330,8 @@
 		</table>
 	</div>
 	<p class="text-muted mt-3 text-xs">
-		Rough projection applies the statewide difference between the registration mix counted and
-		remaining to each district's uncounted share. Counted uses precinct reporting as a proxy;
-		district turnout is unavailable. The range narrows as precincts report. Estimates are not race
-		calls. Historical comparisons remain unavailable until verified on the current district lines.
+		Rough projection shifts each district's uncounted share by how the remaining statewide vote
+		differs from what's counted. Not a race call.
 	</p>
 </section>
 
