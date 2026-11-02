@@ -6,7 +6,7 @@ export type Phase = 'pre' | 'open' | 'closed';
 export const POLLS_OPEN = 7 * 60;
 export const POLLS_CLOSE = 19 * 60;
 export const RESULTS_START = 20 * 60;
-export const LATE_MAIL = { total: 200_000, margin: 10 };
+export const LATE_MAIL = { total: 120_000, margin: 8 };
 
 export const CENTRAL_COUNTIES = new Set([
 	'BAY',
@@ -81,11 +81,11 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
-	{ id: 'strong-r', label: 'Strong R', rep: 0.41, dem: 0.32, oth: 0.26 },
-	{ id: 'lean-r', label: 'Lean R', rep: 0.395, dem: 0.335, oth: 0.26 },
-	{ id: 'middle', label: 'Middle', rep: 0.38, dem: 0.35, oth: 0.26 },
-	{ id: 'lean-d', label: 'Lean D', rep: 0.365, dem: 0.365, oth: 0.26 },
-	{ id: 'strong-d', label: 'Strong D', rep: 0.35, dem: 0.38, oth: 0.26 }
+	{ id: 'strong-r', label: 'Strong R', rep: 0.4075, dem: 0.3225, oth: 0.26 },
+	{ id: 'lean-r', label: 'Lean R', rep: 0.3925, dem: 0.3375, oth: 0.26 },
+	{ id: 'middle', label: 'Middle', rep: 0.3775, dem: 0.3525, oth: 0.26 },
+	{ id: 'lean-d', label: 'Lean D', rep: 0.3625, dem: 0.3675, oth: 0.26 },
+	{ id: 'strong-d', label: 'Strong D', rep: 0.3475, dem: 0.3825, oth: 0.26 }
 ];
 
 export const DEFAULT_PRESET = 'middle';
