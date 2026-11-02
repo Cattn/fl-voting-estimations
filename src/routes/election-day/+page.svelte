@@ -46,7 +46,15 @@
 
 	const estimates = $derived(turnoutEstimates(ed));
 	const projection = $derived(edProjection(ed));
-	const choice = $derived(preset === DEFAULT_PRESET ? 'live' : preset);
+	const choice = $derived(
+		pre
+			? preset === 'live'
+				? DEFAULT_PRESET
+				: preset
+			: preset === DEFAULT_PRESET
+				? 'live'
+				: preset
+	);
 	const turnout = $derived(
 		choice === 'live'
 			? estimates.live.turnout
@@ -54,8 +62,8 @@
 	);
 	const outcome = $derived(edOutcome(ed, turnout, target));
 	const options = $derived([
-		{ id: 'live', label: 'Live pace', turnout: estimates.live.turnout },
-		...PRESETS.filter((p) => p.id !== DEFAULT_PRESET).map((p) => ({
+		...(pre ? [] : [{ id: 'live', label: 'Live pace', turnout: estimates.live.turnout }]),
+		...PRESETS.filter((p) => pre || p.id !== DEFAULT_PRESET).map((p) => ({
 			id: p.id,
 			label: p.label,
 			turnout: estimates.presets.find((e) => e.id === p.id)!.turnout
@@ -387,10 +395,10 @@
 			<div class="border-t pt-4" style:border-color="var(--border)">
 				<h3 class="flex items-center text-sm font-semibold">
 					Election Day turnout<Info align="left"
-						>Share of each party's voters who hadn't voted yet that show up. Live pace starts at {pctOf(
+						>Share of each party's voters who hadn't voted yet that show up. Middle is {pctOf(
 							middle.rep
-						)} R, {pctOf(middle.dem)} D, {pctOf(middle.oth)} other and moves toward each county's reported
-						pace during the day. The lean is the party margin of that turnout.</Info
+						)} R, {pctOf(middle.dem)} D, {pctOf(middle.oth)} other. Once polls open, Live pace replaces
+						it and moves toward each county's reported pace. The lean is the party margin of that turnout.</Info
 					>
 				</h3>
 				<div
