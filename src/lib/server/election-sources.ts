@@ -110,7 +110,9 @@ export async function fetchResults(now = new Date()) {
 		if (!file) throw new Error('Could not verify the current official results download');
 		url = file.href;
 	}
-	const response = await sourceText(url);
+	const fresh = new URL(url);
+	fresh.searchParams.set('t', String(now.getTime()));
+	const response = await sourceText(fresh.href);
 	if (!response.text.split(/\r?\n/, 1)[0].includes('ElectionDate'))
 		throw new Error('Results file is missing election identity');
 	const rows = parseResults(response.text).filter((r) =>

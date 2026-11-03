@@ -197,6 +197,23 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 	return { ...record, baseline, history, night };
 }
 
+export function fillMissingEday(
+	data: FeedData,
+	fallback: { updated: string | null; counties: Map<string, PartyCounts> },
+	source: string
+): FeedData {
+	const key = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+	let added = ZERO;
+	const counties = data.counties.map((c): County => {
+		const eday = fallback.counties.get(key(c.name));
+		if ((c.eday?.total ?? 0) > 0 || !eday?.total) return c;
+		added = addCounts(added, eday, scaleCounts(c.eday ?? ZERO, -1));
+		return { ...c, eday, updated: fallback.updated ?? c.updated, edaySource: source };
+	});
+	if (!added.total || !data.eday) return data;
+	return { ...data, eday: addCounts(data.eday, added), counties };
+}
+
 export function reconcileCounties(incoming: FeedData, previous: FeedData | undefined): FeedData {
 	const carried = incoming.counties.flatMap((c) => {
 		const old = previous?.counties.find((p) => p.code === c.code);

@@ -1,5 +1,6 @@
 import { electionClock, UI_SWITCH_AT } from '../election-clock.ts';
 import {
+	fillMissingEday,
 	observations,
 	reconcileCounties,
 	type ElectionRecord,
@@ -15,6 +16,7 @@ import {
 	REPORTING_URL,
 	validateTurnout
 } from './election-sources.ts';
+import { fetchFreshTake } from './freshtake.ts';
 import { sourceText } from './http.ts';
 import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './election-store.ts';
 import { loadSnapshot, runInBackground } from './store.ts';
@@ -72,7 +74,10 @@ export async function collectElection(
 	const jobs = await Promise.allSettled([
 		initial ? Promise.resolve(initial) : fetchWithRetry(),
 		fetchResults(now),
-		sourceText(REPORTING_URL)
+		sourceText(REPORTING_URL),
+		electionClock(now).minute >= 7 * 60 && electionClock(now).minute < 24 * 60
+			? fetchFreshTake()
+			: Promise.reject(new Error('Not Election Day'))
 	]);
 	let feed = previous?.data;
 	const failures: string[] = [];
@@ -87,6 +92,8 @@ export async function collectElection(
 	if (turnout.status === 'fulfilled') {
 		try {
 			turnout.value = carryRegistration(turnout.value, feed);
+			if (jobs[3].status === 'fulfilled')
+				turnout.value = fillMissingEday(turnout.value, jobs[3].value, 'FreshTake');
 			record.warnings.push(...validateTurnout(turnout.value, now));
 			if (feed && Date.parse(turnout.value.fetchedAt) < Date.parse(feed.fetchedAt))
 				throw new Error('Turnout response is older than the saved snapshot');
