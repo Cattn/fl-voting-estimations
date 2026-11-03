@@ -57,7 +57,11 @@ describe('FreshTake turnout source', () => {
 		ala.early = { ...ala.early, npa: 6_000, oth: 2_000 };
 		ala.updated = '2026-11-03T12:00:00.000Z';
 		const next = freshTakeFeed(parseFreshTake(page(all())), previous);
-		expect(next.counties[0].early).toMatchObject({ npa: 6_000, oth: 2_000, total: ala.early.total });
+		expect(next.counties[0].early).toMatchObject({
+			npa: 6_000,
+			oth: 2_000,
+			total: ala.early.total
+		});
 		expect(next.counties[0].updated).toBe('2026-11-03T12:00:00.000Z');
 	});
 
@@ -81,5 +85,46 @@ describe('FreshTake turnout source', () => {
 		expect(reconcileCounties(small, previous).counties[0].mail.total).toBe(
 			previous.counties[0].mail.total - 1
 		);
+	});
+});
+
+describe('drop guard timing', () => {
+	const base = () => freshTakeFeed(parseFreshTake(page(all())));
+	const at = (feed: ReturnType<typeof base>, minutes: number, early: number) => {
+		const next = structuredClone(feed);
+		next.fetchedAt = new Date(Date.parse('2026-11-03T15:00:00Z') + minutes * 60_000).toISOString();
+		const bro = next.counties.find((c) => c.code === 'BRO')!;
+		const cut = bro.early.total - early;
+		bro.early = { ...bro.early, rep: bro.early.rep - cut, total: early };
+		next.early = { ...next.early, rep: next.early.rep - cut, total: next.early.total - cut };
+		return next;
+	};
+	const broEarly = (f: ReturnType<typeof base>) =>
+		f.counties.find((c) => c.code === 'BRO')!.early.total;
+
+	it('holds a partial drop for 15 minutes, then accepts it as a correction', () => {
+		let feed = base();
+		const full = broEarly(feed);
+		const lower = full - 10_000;
+		feed = reconcileCounties(at(feed, 0, lower), feed);
+		expect(broEarly(feed)).toBe(full);
+		feed = reconcileCounties(at(feed, 14, lower), feed);
+		expect(broEarly(feed)).toBe(full);
+		feed = reconcileCounties(at(feed, 15, lower), feed);
+		expect(broEarly(feed)).toBe(lower);
+		expect(feed.counties.find((c) => c.code === 'BRO')!.heldSince).toBeUndefined();
+	});
+
+	it('never accepts a drop to zero, and takes the real numbers back as soon as they return', () => {
+		let feed = base();
+		const full = broEarly(feed);
+		for (const minutes of [0, 30, 90]) {
+			feed = reconcileCounties(at(feed, minutes, 0), feed);
+			expect(broEarly(feed)).toBe(full);
+		}
+		feed = reconcileCounties(at(feed, 95, full + 500), feed);
+		expect(broEarly(feed)).toBe(full + 500);
+		expect(feed.counties.find((c) => c.code === 'BRO')!.heldSince).toBeUndefined();
+		expect(feed.early.total).toBe(feed.counties.reduce((n, c) => n + c.early.total, 0));
 	});
 });

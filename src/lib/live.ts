@@ -198,19 +198,28 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 }
 
 const METHODS = ['early', 'mail', 'eday'] as const;
+export const DROP_HOLD = 15 * 60_000;
 const dropped = (before: PartyCounts | undefined, after: PartyCounts | undefined) =>
 	!!before && (after?.total ?? 0) < before.total - Math.max(500, before.total * 0.02);
 
 export function reconcileCounties(incoming: FeedData, previous: FeedData | undefined): FeedData {
+	const now = Date.parse(incoming.fetchedAt);
 	const pairs = incoming.counties.map((c) => {
 		const old = previous?.counties.find((p) => p.code === c.code);
 		if (c.status && !['live', 'ok'].includes(c.status) && old)
 			return { c, next: { ...old, status: c.status } };
 		const next: County = { ...c };
+		const since = old?.heldSince ? Date.parse(old.heldSince) : now;
+		let held = false;
 		for (const m of METHODS) {
 			const kept = old?.[m];
-			if (kept && dropped(kept, c[m])) next[m] = kept;
+			if (!kept || !dropped(kept, c[m])) continue;
+			if ((c[m]?.total ?? 0) > 0 && now - since >= DROP_HOLD) continue;
+			next[m] = kept;
+			held = true;
 		}
+		if (held) next.heldSince = old?.heldSince ?? incoming.fetchedAt;
+		else delete next.heldSince;
 		const same =
 			old &&
 			['rep', 'dem', 'npa', 'oth', 'total'].every(
