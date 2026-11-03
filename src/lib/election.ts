@@ -511,6 +511,11 @@ export function dayPaths(
 ): { reported: DayPoint[]; path: DayPoint[]; live: DayPoint[] } {
 	const total = (eday: PartyCounts, mail: PartyCounts) => marginOf(addCounts(s.early, mail, eday));
 	const reported = s.history.map((h) => ({ minute: h.minute, margin: total(h.eday, h.mail) }));
+	const latest = s.history.at(-1);
+	const start =
+		latest && latest.eday.total === s.eday.total && latest.mail.total === s.mail.total
+			? latest.minute
+			: s.minute;
 	if (s.phase !== 'open') return { reported, path: [], live: [] };
 	const countyWeights = s.counties.map((c) => c.early.total + c.mail.total || c.registered);
 	const countyTotal = countyWeights.reduce((sum, n) => sum + n, 0);
@@ -524,7 +529,7 @@ export function dayPaths(
 	const startShare = shareAt(s.minute);
 	const eastStart = dayShare(s.minute);
 	const project = (margin: number) => {
-		const out: DayPoint[] = [{ minute: s.minute, margin: total(s.eday, s.mail) }];
+		const out: DayPoint[] = [{ minute: start, margin: total(s.eday, s.mail) }];
 		for (let m = Math.ceil((s.minute + 1) / 30) * 30; m <= POLLS_CLOSE + 60; m += 30) {
 			const f = startShare >= 1 ? 1 : Math.min(1, (shareAt(m) - startShare) / (1 - startShare));
 			const ed = o.rest.total * (m >= POLLS_CLOSE + 60 ? 1 : f);

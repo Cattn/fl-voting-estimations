@@ -563,6 +563,22 @@ describe('Later-voter shift', () => {
 		expect(intradayShift(bluer, 1)).toBeLessThanOrEqual(15);
 	});
 
+	it('starts the projection on the latest report instead of the current minute', () => {
+		const { state } = sampleElection(feed, 10 * 60);
+		const latest = { minute: 9 * 60 + 54, eday: state.eday, mail: state.mail };
+		const at = {
+			...state,
+			history: [...state.history.filter((h) => h.minute < latest.minute), latest]
+		};
+		const outcome = edOutcome(at, liveTurnout(at).turnout, -8.5);
+		const lines = dayPaths(at, outcome);
+		expect(lines.live[0]).toEqual(lines.reported.at(-1));
+		const newer = { ...at, eday: addCounts(at.eday, { ...ZERO, rep: 500, total: 500 }) };
+		expect(dayPaths(newer, edOutcome(newer, liveTurnout(newer).turnout, -8.5)).live[0].minute).toBe(
+			10 * 60
+		);
+	});
+
 	it('bends the projected line so the bluer votes arrive late, ending in the same place', () => {
 		const { state } = sampleElection(feed, 9 * 60);
 		const outcome = edOutcome(state, liveTurnout(state).turnout, -8.5);
