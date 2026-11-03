@@ -14,7 +14,8 @@ export const load: LayoutServerLoad = async ({ setHeaders, depends, parent }) =>
 			data: {
 				...stored.data,
 				earlyDays: stored.data.earlyDays.map(({ counties: _, ...day }) => day)
-			}
+			},
+			election: { ...stored.election, results: [], night: [] }
 		};
 		return { snapshot };
 	} catch (e) {

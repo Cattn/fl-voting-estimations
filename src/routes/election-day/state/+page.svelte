@@ -29,13 +29,13 @@
 	let tab = $state('GOV');
 
 	const ed = $derived(data.election.state);
-	const races = $derived(tallyRaces(data.election.results));
+	const races = $derived(tallyRaces(data.results));
 	const race = $derived(races.find((r) => r.race === tab) ?? null);
 	const amendments = $derived(races.filter((r) => r.race === 'AMD'));
 	const started = $derived(races.some((r) => r.total > 0));
 	const electorate = $derived(edOutcome(ed, liveTurnout(ed).turnout, DEFAULT_TARGET).final);
 	const projection = $derived(
-		data.election.projectable && race && race.total
+		data.projectable && race && race.total
 			? projectRace(ed.counties, race, electorate.total, electorate.margin)
 			: null
 	);
@@ -50,7 +50,7 @@
 		race ? race.counties.filter((c) => c.precincts && c.reporting >= c.precincts).length : 0
 	);
 
-	const night = $derived<NightPoint[]>(data.election.night.filter((p) => p.race === tab));
+	const night = $derived<NightPoint[]>(data.night.filter((p) => p.race === tab));
 	const nightOption = $derived(
 		projection
 			? resultsNightChartOption(
@@ -247,7 +247,7 @@
 		</p>{/if}
 	<section class="card mt-4 p-4">
 		<h2 class="mb-3 text-base font-semibold">By county</h2>
-		<ResultsMap counties={ed.counties} {race} showComparison={data.election.projectable} />
+		<ResultsMap counties={ed.counties} {race} showComparison={data.projectable} />
 	</section>
 {/if}
 

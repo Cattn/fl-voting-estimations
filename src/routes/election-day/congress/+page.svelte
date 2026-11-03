@@ -22,7 +22,7 @@
 		{ id: 'counted', label: 'Precincts' }
 	];
 	const ed = $derived(data.election.state);
-	const races = $derived(tallyRaces(data.election.results));
+	const races = $derived(tallyRaces(data.results));
 	const governor = $derived(races.find((r) => r.race === 'GOV'));
 	const all = $derived(addCounts(ed.early, ed.mail, ed.eday));
 	const mix = $derived(governor ? countedMix(ed.counties, governor) : ZERO);
@@ -34,7 +34,7 @@
 	const drift = $derived(
 		mix.total && remaining.total > 1000 ? marginOf(remaining) - marginOf(mix) : 0
 	);
-	const rows = $derived(districtResults(races, data.election.projectable ? drift : 0));
+	const rows = $derived(districtResults(races, data.projectable ? drift : 0));
 	const reported = $derived(rows.filter((r) => !r.district.uncontested && r.race?.total));
 	const watch = $derived(closestDistricts(rows));
 	const unopposed = (party: 'REP' | 'DEM') =>
@@ -180,9 +180,9 @@
 				</div>
 				<div class="text-muted num mt-1 text-xs">
 					Proj. <b class={marginClass(r.projected)}
-						>{data.election.projectable ? fmtMargin(r.projected, 1) : 'Awaiting turnout'}</b
+						>{data.projectable ? fmtMargin(r.projected, 1) : 'Awaiting turnout'}</b
 					>
-					{#if data.election.projectable}±{r.range.toFixed(1)}{/if}
+					{#if data.projectable}±{r.range.toFixed(1)}{/if}
 				</div>
 			</div>
 		{:else}
@@ -330,8 +330,8 @@
 								? marginClass(r.projected)
 								: ''}"
 						>
-							{data.election.projectable && r.race?.total ? fmtMargin(r.projected, 1) : '–'}
-							{#if data.election.projectable && r.race?.total}<span class="text-muted text-xs"
+							{data.projectable && r.race?.total ? fmtMargin(r.projected, 1) : '–'}
+							{#if data.projectable && r.race?.total}<span class="text-muted text-xs"
 									>±{r.range.toFixed(1)}</span
 								>{/if}
 						</td>
