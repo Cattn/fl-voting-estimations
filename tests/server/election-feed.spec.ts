@@ -159,3 +159,23 @@ describe('independent source collection', () => {
 		expect(mocks.persist).not.toHaveBeenCalled();
 	});
 });
+
+describe('daily history merge', () => {
+	it('keeps saved past days and only lets today change', async () => {
+		const { mergeDays } = await import('../../src/lib/server/election-feed.ts');
+		const saved = [
+			{ date: '2026-11-01', total: 10 },
+			{ date: '2026-11-03', total: 1 }
+		];
+		const incoming = [
+			{ date: '2026-11-01', total: 99 },
+			{ date: '2026-11-02', total: 5 },
+			{ date: '2026-11-03', total: 7 }
+		];
+		expect(mergeDays(incoming, saved, '2026-11-03')).toEqual([
+			{ date: '2026-11-01', total: 10 },
+			{ date: '2026-11-02', total: 5 },
+			{ date: '2026-11-03', total: 7 }
+		]);
+	});
+});

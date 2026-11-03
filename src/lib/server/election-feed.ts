@@ -47,10 +47,15 @@ export function emptyElection(): ElectionRecord {
 	};
 }
 
-const mergeDays = <T extends { date: string }>(incoming: T[], previous: T[] = []): T[] =>
-	[...new Map([...previous, ...incoming].map((p) => [p.date, p])).values()].sort((a, b) =>
-		a.date.localeCompare(b.date)
-	);
+export const mergeDays = <T extends { date: string }>(
+	incoming: T[],
+	previous: T[] = [],
+	today: string
+): T[] => {
+	const days = new Map(previous.map((p) => [p.date, p]));
+	for (const d of incoming) if (d.date >= today || !days.has(d.date)) days.set(d.date, d);
+	return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+};
 
 export async function fetchTurnout(previous?: FeedData, now = new Date()): Promise<FeedData> {
 	try {
@@ -106,8 +111,8 @@ export async function collectElection(
 				retainTodayMail(
 					{
 						...turnout.value,
-						earlyDays: mergeDays(turnout.value.earlyDays, feed?.earlyDays),
-						mailDays: mergeDays(turnout.value.mailDays, feed?.mailDays)
+						earlyDays: mergeDays(turnout.value.earlyDays, feed?.earlyDays, electionClock(now).date),
+						mailDays: mergeDays(turnout.value.mailDays, feed?.mailDays, electionClock(now).date)
 					},
 					feed,
 					electionClock(now).date
