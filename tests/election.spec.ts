@@ -541,15 +541,12 @@ describe('Later-voter shift', () => {
 			history: history.map((h) => ({ ...h, mail: ZERO }))
 		}) as EdState;
 
-	it('starts at the dampened default and fades by poll close', () => {
-		expect(intradayShift(at(POLLS_OPEN, ZERO, []), 0)).toBeCloseTo(INTRADAY_SHIFT, 6);
-		expect(intradayShift(at(POLLS_CLOSE, ZERO, []), 0)).toBeCloseTo(0, 6);
-		const noon = intradayShift(at(12 * 60, ZERO, []), 0);
-		expect(noon).toBeGreaterThan(0);
-		expect(noon).toBeLessThan(INTRADAY_SHIFT);
+	it('expects the same later-voter shift all day without data', () => {
+		for (const minute of [POLLS_OPEN, 12 * 60, POLLS_CLOSE])
+			expect(intradayShift(at(minute, ZERO, []), 0)).toBeCloseTo(INTRADAY_SHIFT, 6);
 	});
 
-	it('grows when recent votes run bluer than the day so far, and shrinks when they do not', () => {
+	it('grows when recent votes run bluer than the day so far, and never shrinks below the default', () => {
 		const morning = votes(600_000, 300_000, 100_000);
 		const bluer = at(15 * 60, addCounts(morning, votes(150_000, 150_000, 50_000)), [
 			{ minute: 13 * 60, eday: morning }
@@ -559,7 +556,7 @@ describe('Later-voter shift', () => {
 		]);
 		const prior = intradayShift(at(15 * 60, ZERO, []), 0);
 		expect(intradayShift(bluer, 0.5)).toBeGreaterThan(prior);
-		expect(intradayShift(same, 0.5)).toBeLessThan(prior);
+		expect(intradayShift(same, 0.5)).toBeCloseTo(prior, 6);
 		expect(intradayShift(bluer, 0)).toBeCloseTo(prior, 6);
 		expect(intradayShift(bluer, 1)).toBeLessThanOrEqual(15);
 	});

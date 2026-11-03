@@ -449,17 +449,17 @@ export function edScenarios(
 }
 
 export const TREND_GAP = 20;
-export const INTRADAY_SHIFT = 3.5;
+export const INTRADAY_SHIFT = 7;
 export const SHIFT_WINDOW = 90;
 
 export function intradayShift(s: EdState, share: number): number {
-	const prior = INTRADAY_SHIFT * (1 - dayShare(s.minute));
+	const prior = INTRADAY_SHIFT;
 	const past = s.history.findLast((h) => h.minute <= s.minute - SHIFT_WINDOW);
 	if (!past || !s.eday.total) return prior;
 	const recent = addCounts(s.eday, scaleCounts(past.eday, -1));
 	if (recent.total < Math.max(20_000, 0.1 * s.eday.total)) return prior;
-	const observed = Math.max(-4, Math.min(10, marginOf(recent) - marginOf(s.eday)));
-	return prior + (observed - prior) * Math.min(0.5, Math.max(0, share));
+	const observed = Math.min(15, marginOf(recent) - marginOf(s.eday));
+	return prior + Math.max(0, observed - prior) * Math.min(0.5, Math.max(0, share));
 }
 
 export interface EdProjection {
@@ -480,7 +480,9 @@ export function edProjection(s: EdState, target = DEFAULT_TARGET): EdProjection 
 	const shift = s.eday.total && base.rest.total ? intradayShift(s, base.share) : 0;
 	const trend = s.eday.total && base.rest.total ? bounded(base.restMargin + shift) : null;
 	const weight =
-		trend === null ? 0 : clamp(base.share * (1 + Math.abs(needed - trend) / TREND_GAP));
+		trend === null
+			? 0
+			: clamp(Math.sqrt(Math.max(0, base.share)) * (1 + Math.abs(needed - trend) / TREND_GAP));
 	const restMargin = trend === null ? needed : needed + (trend - needed) * weight;
 	const restGap = (base.rest.total * restMargin) / 100;
 	const known = addCounts(s.early, s.mail, base.mailLeft, s.eday);
