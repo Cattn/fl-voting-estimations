@@ -681,3 +681,70 @@ export function resultsNightChartOption(
 		]
 	} as EChartsOption;
 }
+
+export function edMarginChartOption(
+	p: Palette,
+	rows: { minute: number; sofar: number; votes: number; added: number | null; addedVotes: number }[]
+): EChartsOption {
+	const values = rows.flatMap((r) => [r.sofar, ...(r.added === null ? [] : [r.added])]);
+	if (!values.length) values.push(0);
+	const lo = Math.floor((Math.min(...values) - 1) / 5) * 5;
+	const hi = Math.ceil((Math.max(...values) + 1) / 5) * 5;
+	return {
+		textStyle: baseText(p),
+		animationDuration: 300,
+		grid: { left: 52, right: 24, top: 16, bottom: 36 },
+		legend: { show: false },
+		tooltip: {
+			...tooltipBase(p),
+			trigger: 'axis',
+			axisPointer: { type: 'line', lineStyle: { color: p.axis } },
+			formatter: (params: unknown) => {
+				const minute = (params as { value: number[] }[])[0]?.value[0];
+				const r = rows.find((x) => x.minute === minute);
+				if (!r) return '';
+				const row = (label: string, value: string, color: string) =>
+					`<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><b style="color:${color}">${value}</b></div>`;
+				return `<div style="min-width:180px"><div style="font-weight:600;margin-bottom:4px">${clockLabel(r.minute)} ET</div>${row('ED so far', fmtMargin(r.sofar, 2), signColor(p, r.sofar))}${row('Votes', fmtInt(r.votes), p.ink)}${r.added === null ? '' : row(`New votes (${fmtInt(r.addedVotes)})`, fmtMargin(r.added, 1), signColor(p, r.added))}</div>`;
+			}
+		},
+		xAxis: {
+			type: 'value',
+			min: 7 * 60,
+			max: 20 * 60,
+			interval: 60,
+			axisLine: { lineStyle: { color: p.axis } },
+			splitLine: { show: false },
+			axisLabel: { color: p.muted, formatter: (v: number) => clockLabel(v) }
+		},
+		yAxis: {
+			type: 'value',
+			min: lo,
+			max: hi,
+			axisLabel: { color: p.muted, formatter: (v: number) => fmtMargin(v, 0) },
+			splitLine: { lineStyle: { color: p.grid } }
+		},
+		series: [
+			{
+				name: 'New votes',
+				type: 'scatter',
+				symbolSize: 7,
+				data: rows
+					.filter((r) => r.added !== null)
+					.map((r) => ({
+						value: [r.minute, r.added],
+						itemStyle: { color: signColor(p, r.added!), opacity: 0.45 }
+					}))
+			},
+			{
+				name: 'ED so far',
+				type: 'line',
+				data: rows.map((r) => [r.minute, r.sofar]),
+				symbol: 'circle',
+				symbolSize: 5,
+				lineStyle: { width: 2.5, color: signColor(p, rows.at(-1)?.sofar ?? 0) },
+				itemStyle: { color: signColor(p, rows.at(-1)?.sofar ?? 0) }
+			}
+		]
+	} as EChartsOption;
+}

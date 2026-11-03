@@ -5,13 +5,19 @@
 	import Info from '#lib/components/Info.svelte';
 	import LegendToggle from '#lib/components/LegendToggle.svelte';
 	import MarginSlider from '#lib/components/MarginSlider.svelte';
-	import { dailyChartOption, edDayChartOption, type DailyRow } from '#lib/charts.ts';
+	import {
+		dailyChartOption,
+		edDayChartOption,
+		edMarginChartOption,
+		type DailyRow
+	} from '#lib/charts.ts';
 	import { edMode } from '#lib/ed-mode.svelte.ts';
 	import {
 		addCounts,
 		dayPaths,
 		DEFAULT_PRESET,
 		edOutcome,
+		edMarginRows,
 		edProjection,
 		edScenarios,
 		fmtClock,
@@ -108,6 +114,8 @@
 		)
 	);
 	const rows = $derived(halfHourRows(ed, turnout, target));
+	const marginRows = $derived(edMarginRows(ed));
+	const marginOption = $derived(edMarginChartOption(theme.palette, marginRows));
 	const scenarios = $derived(
 		custom
 			? edScenarios(ed, outcome, target)
@@ -427,6 +435,20 @@
 	{/if}
 {/snippet}
 
+{#snippet marginChart()}
+	{#if marginRows.length > 1}
+		<section class="card p-4">
+			<h2 class="mb-2 flex items-center text-base font-semibold">
+				Election Day margin through the day<Info align="left"
+					>The line is the margin of all Election Day votes so far. Dots are the margin of the new
+					votes in each window: 15 minutes for recent hours, 30 minutes earlier in the day.</Info
+				>
+			</h2>
+			<EChart option={marginOption} height={260} label="Election Day margin through the day" />
+		</section>
+	{/if}
+{/snippet}
+
 {#snippet recap()}
 	<details class="card p-4">
 		<summary class="cursor-pointer text-base font-semibold">Early voting recap</summary>
@@ -552,6 +574,7 @@
 			{@render partyTable()}
 			{@render scenarioTable()}
 			{@render halfHours()}
+			{@render marginChart()}
 		</div>
 	</div>
 {:else if closed}
@@ -589,6 +612,7 @@
 			{@render partyTable()}
 			{@render halfHours()}
 		</div>
+		{@render marginChart()}
 		{@render recap()}
 	</div>
 {:else}
@@ -646,6 +670,7 @@
 			<div class="min-w-0 [&>section]:h-full">{@render scenarioTable()}</div>
 		</div>
 		{@render halfHours()}
+		{@render marginChart()}
 		<section class="card p-4">
 			<h2 class="mb-3 text-base font-semibold">By county &amp; district</h2>
 			<EdCountyMap counties={ed.counties} />

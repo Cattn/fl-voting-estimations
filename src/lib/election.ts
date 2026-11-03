@@ -594,3 +594,31 @@ export function halfHourRows(s: EdState, turnout: PartyCounts, target: number): 
 	}
 	return rows.reverse();
 }
+
+export interface EdMarginRow {
+	minute: number;
+	sofar: number;
+	votes: number;
+	added: number | null;
+	addedVotes: number;
+}
+
+export function edMarginRows(s: EdState, step = 15, min = 10_000): EdMarginRow[] {
+	const points = new Map<number, { minute: number; eday: PartyCounts }>();
+	for (const h of s.history)
+		if (h.eday.total >= min && !points.has(Math.floor(h.minute / step)))
+			points.set(Math.floor(h.minute / step), h);
+	const list = [...points.values()];
+	if (s.eday.total >= min && (list.at(-1)?.eday.total ?? 0) !== s.eday.total)
+		list.push({ minute: s.minute, eday: s.eday });
+	return list.map((h, i) => {
+		const added = i ? addCounts(h.eday, scaleCounts(list[i - 1].eday, -1)) : h.eday;
+		return {
+			minute: h.minute,
+			sofar: marginOf(h.eday),
+			votes: h.eday.total,
+			added: added.total > 0 ? marginOf(added) : null,
+			addedVotes: Math.max(0, added.total)
+		};
+	});
+}

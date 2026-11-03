@@ -5,6 +5,7 @@ import {
 	dayShare,
 	dayPaths,
 	edOutcome,
+	edMarginRows,
 	edProjection,
 	edScenarios,
 	INTRADAY_SHIFT,
@@ -599,5 +600,31 @@ describe('Later-voter shift', () => {
 		const p = edProjection(sampleElection(feed, 9 * 60).state);
 		expect(p.shift).toBeGreaterThan(0);
 		expect(p.trend!).toBeCloseTo(Math.max(-100, Math.min(100, p.base.restMargin + p.shift)), 6);
+	});
+});
+
+describe('Election Day margin rows', () => {
+	it('takes one point per 15 minutes and the margin of each window', () => {
+		const v = (rep: number, dem: number): PartyCounts => ({
+			rep,
+			dem,
+			npa: 0,
+			oth: 0,
+			total: rep + dem
+		});
+		const history = [
+			{ minute: 420, eday: ZERO },
+			{ minute: 450, eday: v(600, 400) },
+			{ minute: 453, eday: v(700, 450) },
+			{ minute: 465, eday: v(1200, 800) },
+			{ minute: 480, eday: v(1500, 1300) }
+		].map((h) => ({ ...h, mail: ZERO }));
+		const state = { ...sampleElection(feed, 490).state, minute: 490, eday: v(1600, 1500), history };
+		const rows = edMarginRows(state as EdState, 15, 1);
+		expect(rows.map((r) => r.minute)).toEqual([450, 465, 480, 490]);
+		expect(rows[0].added).toBeCloseTo(-20, 6);
+		expect(rows[1].added).toBeCloseTo(-20, 6);
+		expect(rows[2].added).toBeCloseTo(25, 6);
+		expect(rows[3].sofar).toBeCloseTo(((1500 - 1600) / 3100) * 100, 6);
 	});
 });
