@@ -134,6 +134,8 @@
 		}
 	]);
 
+	const partySum = (k: 'sofar' | 'full' | 'pool') => parties.reduce((n, r) => n + r[k], 0);
+
 	function loadForecast(f: Forecast) {
 		target = f.target;
 	}
@@ -289,6 +291,18 @@
 						</tr>
 					{/each}
 				</tbody>
+				<tfoot>
+					<tr class="border-t-2 font-semibold" style:border-color="var(--axis)">
+						<td class="py-1.5">Total</td>
+						{#if !pre}<td class="pl-3 text-right">{fmtInt(partySum('sofar'))}</td>{/if}
+						{#if !closed}<td class="pl-3 text-right">{fmtInt(partySum('full'))}</td>{/if}
+						<td class="pl-3 text-right"
+							>{partySum('pool')
+								? ((partySum(closed ? 'sofar' : 'full') / partySum('pool')) * 100).toFixed(1)
+								: '0'}%</td
+						>
+					</tr>
+				</tfoot>
 			</table>
 		</div>
 	</section>
@@ -614,23 +628,21 @@
 			{@render progress()}
 			{@render dayChart()}
 		{/if}
-		<section class="card p-4">
-			<h2 class="mb-3 text-base font-semibold">By county &amp; district</h2>
-			<EdCountyMap counties={ed.counties} />
-		</section>
 		<div class="grid gap-6 lg:grid-cols-2">
 			<div class="flex min-w-0 flex-col gap-6">
 				{@render partyTable()}
-				<section class="card num space-y-1 p-4 text-sm">
+				<section class="card num flex-1 space-y-1 p-4 text-sm">
 					<h2 class="mb-2 text-base font-semibold">Early and mail</h2>
 					{@render fixedRows()}
 				</section>
 			</div>
-			<div class="flex min-w-0 flex-col gap-6">
-				{@render scenarioTable()}
-				{@render halfHours()}
-			</div>
+			<div class="min-w-0 [&>section]:h-full">{@render scenarioTable()}</div>
 		</div>
+		{@render halfHours()}
+		<section class="card p-4">
+			<h2 class="mb-3 text-base font-semibold">By county &amp; district</h2>
+			<EdCountyMap counties={ed.counties} />
+		</section>
 		{@render recap()}
 	</div>
 {/if}
