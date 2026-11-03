@@ -81,9 +81,10 @@
 
 {#if !started}
 	<section class="card mb-4 p-4">
-		<h3 class="font-semibold">Results at 8 PM ET</h3>
+		<h3 class="font-semibold">Results after 7 PM ET</h3>
 		<p class="text-muted text-sm">
-			Early and mail ballots post first, then Election Day precincts through the night.
+			Counties post early and mail ballots first, starting when most polls close at 7 PM ET (the
+			western Panhandle closes at 8). Election Day precincts follow through the night.
 		</p>
 	</section>
 {/if}

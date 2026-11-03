@@ -91,8 +91,8 @@ describe('Election Day preview', () => {
 		expect(preview('phase=pre&at=15:10')).toBe(-530);
 		expect(preview('phase=open&at=14:30')).toBe(870);
 		expect(preview('phase=closed&at=22:15')).toBe(1335);
-		expect(preview('phase=open&at=23:59')).toBeLessThan(RESULTS_START);
-		expect(preview('phase=closed&at=10:00')).toBe(RESULTS_START);
+		expect(preview('phase=open&at=23:59')).toBeLessThan(20 * 60);
+		expect(preview('phase=closed&at=10:00')).toBe(20 * 60);
 		expect(preview('phase=open&at=00:00')).toBe(POLLS_OPEN);
 		expect(preview('phase=closed&at=99:99')).toBe(1335);
 		expect(preview('at=19:60')).toBe(870);

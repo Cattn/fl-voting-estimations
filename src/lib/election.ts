@@ -5,7 +5,7 @@ export type Phase = 'pre' | 'open' | 'closed';
 
 export const POLLS_OPEN = 7 * 60;
 export const POLLS_CLOSE = 19 * 60;
-export const RESULTS_START = 20 * 60;
+export const RESULTS_START = 19 * 60;
 export const LATE_MAIL = { total: 120_000, margin: 8 };
 
 export const CENTRAL_COUNTIES = new Set([

@@ -1,6 +1,7 @@
 import {
 	addCounts,
 	cleanHistory,
+	RESULTS_START,
 	scaleCounts,
 	ZERO,
 	type EdSnapshot,
@@ -177,7 +178,7 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 	}
 	let night = record.night;
 	if (
-		minute >= 20 * 60 &&
+		minute >= RESULTS_START &&
 		!snapshot.data.partial &&
 		(snapshot.data.received === undefined || snapshot.data.received === 67) &&
 		record.sources.results.acceptedAt === at &&
