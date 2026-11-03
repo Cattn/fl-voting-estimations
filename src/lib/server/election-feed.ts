@@ -18,7 +18,7 @@ import {
 import { FRESHTAKE_URL } from './freshtake.ts';
 import { sourceText } from './http.ts';
 import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './election-store.ts';
-import { loadSnapshot, runInBackground } from './store.ts';
+import { loadSnapshot } from './store.ts';
 
 let cache: ElectionSnapshot | null = null;
 let reading: Promise<ElectionSnapshot> | null = null;
@@ -255,12 +255,15 @@ async function readElection(): Promise<ElectionSnapshot> {
 	return (cache = await collectElection(null));
 }
 
+export const READ_INTERVAL = 15_000;
+
 export async function getElectionSnapshot(): Promise<ElectionSnapshot> {
-	if (cache && Date.now() - checkedAt < COLLECTION_INTERVAL) return cache;
+	if (cache && Date.now() - checkedAt < READ_INTERVAL) return cache;
 	reading ??= readElection().finally(() => (reading = null));
-	if (cache) {
-		runInBackground(reading.catch(() => undefined));
-		return cache;
+	try {
+		return await reading;
+	} catch (e) {
+		if (cache) return cache;
+		throw e;
 	}
-	return reading;
 }

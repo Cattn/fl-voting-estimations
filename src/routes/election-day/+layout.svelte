@@ -63,6 +63,18 @@
 		theme.init();
 		loadEdMode();
 	});
+
+	$effect(() => {
+		const at = updated;
+		if (!at) return;
+		let timer: ReturnType<typeof setTimeout>;
+		const tick = async () => {
+			if (document.visibilityState === 'visible') await refresh();
+			if (data.election.sources.turnout.acceptedAt === at) timer = setTimeout(tick, 30_000);
+		};
+		timer = setTimeout(tick, Math.max(5_000, at + 3 * 60_000 + 20_000 - Date.now()));
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <svelte:head>
