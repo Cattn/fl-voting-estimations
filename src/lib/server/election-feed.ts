@@ -8,14 +8,14 @@ import {
 } from '../live.ts';
 import { RESULTS_URL } from '../results.ts';
 import type { FeedData } from '../types.ts';
-import { carryRegistration, fetchWithRetry, retainTodayMail } from './feed.ts';
+import { carryRegistration, fetchTurnout, mergeDays, retainTodayMail } from './feed.ts';
 import {
 	fetchResults,
 	parseReporting,
 	REPORTING_URL,
 	validateTurnout
 } from './election-sources.ts';
-import { fetchFreshTake, freshTakeFeed, FRESHTAKE_URL } from './freshtake.ts';
+import { FRESHTAKE_URL } from './freshtake.ts';
 import { sourceText } from './http.ts';
 import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './election-store.ts';
 import { loadSnapshot, runInBackground } from './store.ts';
@@ -45,25 +45,6 @@ export function emptyElection(): ElectionRecord {
 		baseline: null,
 		warnings: []
 	};
-}
-
-export const mergeDays = <T extends { date: string }>(
-	incoming: T[],
-	previous: T[] = [],
-	today: string
-): T[] => {
-	const days = new Map(previous.map((p) => [p.date, p]));
-	for (const d of incoming) if (d.date >= today || !days.has(d.date)) days.set(d.date, d);
-	return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
-};
-
-export async function fetchTurnout(previous?: FeedData, now = new Date()): Promise<FeedData> {
-	try {
-		return freshTakeFeed(await fetchFreshTake(), previous, now);
-	} catch (primary) {
-		console.error({ event: 'freshtake_fetch', error: (primary as Error).message });
-		return fetchWithRetry();
-	}
 }
 
 export async function collectElection(

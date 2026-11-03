@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../src/lib/server/bindings.ts', () => ({ env: {}, waitUntil: vi.fn() }));
 vi.mock('../../src/lib/server/feed.ts', async (original) => ({
 	...(await original<typeof import('../../src/lib/server/feed.ts')>()),
-	fetchWithRetry: mocks.turnout
+	fetchWithRetry: mocks.turnout,
+	fetchTurnout: () => mocks.turnout()
 }));
 vi.mock('../../src/lib/server/http.ts', () => ({ sourceText: mocks.status }));
 vi.mock('../../src/lib/server/election-sources.ts', async (original) => ({
@@ -162,7 +163,7 @@ describe('independent source collection', () => {
 
 describe('daily history merge', () => {
 	it('keeps saved past days and only lets today change', async () => {
-		const { mergeDays } = await import('../../src/lib/server/election-feed.ts');
+		const { mergeDays } = await import('../../src/lib/server/feed.ts');
 		const saved = [
 			{ date: '2026-11-01', total: 10 },
 			{ date: '2026-11-03', total: 1 }

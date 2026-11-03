@@ -148,7 +148,8 @@ describe('getFeed', () => {
 
 		await Promise.all(Array.from({ length: 50 }, () => feed.getFeed()));
 		await Promise.all(Array.from({ length: 50 }, () => feed.getFeed()));
-		expect(ok).toHaveBeenCalledOnce();
+		expect(ok).toHaveBeenCalledTimes(2);
+		expect(String((ok.mock.calls[0] as unknown[])[0])).toContain('freshtake.vote');
 		expect(kv.saveSnapshot).not.toHaveBeenCalled();
 	});
 

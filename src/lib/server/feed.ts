@@ -1,5 +1,6 @@
 import { parseLiteral } from './literal.ts';
 import { fetchSource, SOURCE_URL } from './source.ts';
+import { fetchFreshTake, freshTakeFeed } from './freshtake.ts';
 import { floridaClock } from '../model.ts';
 import { loadSnapshot, runInBackground, saveSnapshot, type Snapshot } from './store.ts';
 import type { County, CountyDayCounts, DayCounts, FeedData, PartyCounts } from '#lib/types.ts';
@@ -109,6 +110,16 @@ export function retainTodayMail(
 	};
 }
 
+export const mergeDays = <T extends { date: string }>(
+	incoming: T[],
+	previous: T[] = [],
+	today: string
+): T[] => {
+	const days = new Map(previous.map((p) => [p.date, p]));
+	for (const d of incoming) if (d.date >= today || !days.has(d.date)) days.set(d.date, d);
+	return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+};
+
 const RETRY_DELAYS_MS = [1500, 3000, 5000];
 const ATTEMPT_TIMEOUT_MS = 8000;
 const TOTAL_BUDGET_MS = 20_000;
@@ -144,11 +155,27 @@ export async function fetchWithRetry(): Promise<FeedData> {
 	throw lastError ?? new Error('Source timed out');
 }
 
+export async function fetchTurnout(previous?: FeedData, now = new Date()): Promise<FeedData> {
+	try {
+		return freshTakeFeed(await fetchFreshTake(), previous, now);
+	} catch (primary) {
+		console.error({ event: 'freshtake_fetch', error: (primary as Error).message });
+		return fetchWithRetry();
+	}
+}
+
 async function refresh(): Promise<FeedData> {
 	try {
+		const previous = cache?.data ?? (await loadSnapshot())?.data;
+		const today = floridaClock().today;
+		const latest = carryRegistration(await fetchTurnout(previous), previous);
 		const data = retainTodayMail(
-			carryRegistration(await fetchWithRetry(), cache?.data),
-			cache?.data
+			{
+				...latest,
+				earlyDays: mergeDays(latest.earlyDays, previous?.earlyDays, today),
+				mailDays: mergeDays(latest.mailDays, previous?.mailDays, today)
+			},
+			previous
 		);
 		cache = { at: Date.now(), data };
 		return data;
