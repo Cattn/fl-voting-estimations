@@ -513,7 +513,10 @@ export function edDayChartOption(
 			trigger: 'axis',
 			axisPointer: { type: 'line', lineStyle: { color: p.axis } },
 			formatter: (params: unknown) => {
-				const rows = params as { seriesName: string; value: number[] }[];
+				const all = params as { seriesName: string; value: number[] }[];
+				const rows = all.some((r) => r.seriesName === 'Reported')
+					? all.filter((r) => r.seriesName === 'Reported')
+					: all;
 				if (!rows.length) return '';
 				const body = rows
 					.map(
