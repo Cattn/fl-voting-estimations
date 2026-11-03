@@ -13,7 +13,7 @@ import { viewElection } from '../src/lib/view-election.ts';
 import { load } from '../src/routes/+layout.server.ts';
 import { validateTurnout, parseReporting } from '../src/lib/server/election-sources.ts';
 import { parseResults } from '../src/lib/results.ts';
-import { addCounts, liveTurnout } from '../src/lib/election.ts';
+import { addCounts, liveTurnout, scaleCounts, ZERO } from '../src/lib/election.ts';
 import type { FeedData } from '../src/lib/types.ts';
 
 const at = new Date('2026-11-03T22:15:00-05:00');
@@ -96,6 +96,21 @@ describe('live data consistency', () => {
 		incoming.counties[0].eday!.rep -= 10;
 		incoming.counties[0].eday!.total -= 10;
 		expect(reconcileCounties(incoming, old).counties[0].edayUpdated).toBe('2026-11-04T02:00:00Z');
+	});
+	it('adds a county the source marks missing back into the statewide totals', () => {
+		const old = snapshot().data;
+		const incoming = structuredClone(old);
+		const gone = incoming.counties[0];
+		for (const m of ['early', 'mail', 'eday'] as const) {
+			incoming[m] = addCounts(incoming[m]!, scaleCounts(gone[m]!, -1));
+			gone[m] = { ...ZERO };
+		}
+		gone.status = 'missing';
+		gone.registered = 0;
+		const fixed = reconcileCounties(incoming, old);
+		expect(fixed.counties[0].early).toEqual(old.counties[0].early);
+		for (const m of ['early', 'mail', 'eday'] as const) expect(fixed[m]).toEqual(old[m]);
+		expect(validateTurnout(fixed, at).some((w) => /totals differ/.test(w))).toBe(false);
 	});
 	it('validates county identities, age and per-party aggregate agreement', () => {
 		const feed = snapshot().data;

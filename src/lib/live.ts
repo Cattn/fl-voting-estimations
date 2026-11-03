@@ -1,4 +1,11 @@
-import { addCounts, cleanHistory, ZERO, type EdSnapshot, type EdState } from './election.ts';
+import {
+	addCounts,
+	cleanHistory,
+	scaleCounts,
+	ZERO,
+	type EdSnapshot,
+	type EdState
+} from './election.ts';
 import { ELECTION_DAY, marginOf } from './model.ts';
 import { countedMix, raceMargin, tallyRaces, type ResultRow } from './results.ts';
 import { electionClock } from './election-clock.ts';
@@ -191,8 +198,22 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 }
 
 export function reconcileCounties(incoming: FeedData, previous: FeedData | undefined): FeedData {
+	const carried = incoming.counties.flatMap((c) => {
+		const old = previous?.counties.find((p) => p.code === c.code);
+		return c.status && !['live', 'ok'].includes(c.status) && old ? [{ c, old }] : [];
+	});
+	const restore = (method: 'early' | 'mail' | 'eday', statewide: PartyCounts) =>
+		addCounts(
+			statewide,
+			...carried.map(({ c, old }) =>
+				addCounts(old[method] ?? ZERO, scaleCounts(c[method] ?? ZERO, -1))
+			)
+		);
 	return {
 		...incoming,
+		early: restore('early', incoming.early),
+		mail: restore('mail', incoming.mail),
+		...(incoming.eday ? { eday: restore('eday', incoming.eday) } : {}),
 		counties: incoming.counties.map((c): County => {
 			const old = previous?.counties.find((p) => p.code === c.code);
 			if (c.status && !['live', 'ok'].includes(c.status) && old)
