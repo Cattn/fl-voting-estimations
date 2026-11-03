@@ -127,6 +127,21 @@ export function electionState(snapshot: ElectionSnapshot, now = new Date()): EdS
 	};
 }
 
+export function slimHistory(history: EdSnapshot[], minute: number): EdSnapshot[] {
+	const buckets = new Set<number>();
+	return history.map((p, i) => {
+		const bucket = Math.floor(p.minute / 15);
+		const keep =
+			i === history.length - 1 || (p.minute >= minute - 120 && p.counties && !buckets.has(bucket));
+		if (keep) {
+			buckets.add(bucket);
+			return p;
+		}
+		if (!p.counties) return p;
+		return { minute: p.minute, eday: p.eday, mail: p.mail };
+	});
+}
+
 export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRecord {
 	const at = now.getTime();
 	const record = snapshot.election;
@@ -152,10 +167,13 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 			const bucket = Math.floor(p.minute / 30);
 			if (p.minute < minute - 120 && !coarse.has(bucket)) coarse.set(bucket, p);
 		}
-		history = cleanHistory([
-			...coarse.values(),
-			...[...points.values()].filter((p) => p.minute >= minute - 120)
-		]).slice(-80);
+		history = slimHistory(
+			cleanHistory([
+				...coarse.values(),
+				...[...points.values()].filter((p) => p.minute >= minute - 120)
+			]).slice(-80),
+			minute
+		);
 	}
 	let night = record.night;
 	if (

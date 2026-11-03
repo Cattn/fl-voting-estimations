@@ -8,7 +8,14 @@ export const load: LayoutServerLoad = async ({ setHeaders, depends, parent }) =>
 	if (serverClock.earlyVoting) redirect(307, '/');
 	try {
 		setHeaders({ 'cache-control': 'no-store' });
-		const snapshot = await getElectionSnapshot();
+		const stored = await getElectionSnapshot();
+		const snapshot = {
+			...stored,
+			data: {
+				...stored.data,
+				earlyDays: stored.data.earlyDays.map(({ counties: _, ...day }) => day)
+			}
+		};
 		return { snapshot };
 	} catch (e) {
 		error(502, `Could not load turnout data: ${(e as Error).message}`);

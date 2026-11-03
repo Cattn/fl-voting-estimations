@@ -21,7 +21,6 @@ import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './el
 import { loadSnapshot } from './store.ts';
 
 let cache: ElectionSnapshot | null = null;
-let reading: Promise<ElectionSnapshot> | null = null;
 let checkedAt = 0;
 const health = (url: string): SourceHealth => ({
 	url,
@@ -259,9 +258,8 @@ export const READ_INTERVAL = 15_000;
 
 export async function getElectionSnapshot(): Promise<ElectionSnapshot> {
 	if (cache && Date.now() - checkedAt < READ_INTERVAL) return cache;
-	reading ??= readElection().finally(() => (reading = null));
 	try {
-		return await reading;
+		return await readElection();
 	} catch (e) {
 		if (cache) return cache;
 		throw e;
