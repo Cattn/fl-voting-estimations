@@ -15,7 +15,6 @@ export interface County {
 	eday?: PartyCounts;
 	updated?: string;
 	edayUpdated?: string;
-	edaySource?: string;
 	status?: string;
 }
 

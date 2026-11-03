@@ -571,6 +571,12 @@ describe('Later-voter shift', () => {
 		expect(bent.at(-1)!.margin).toBeCloseTo(flat.at(-1)!.margin, 9);
 		const mid = bent.findIndex((p) => p.minute === 14 * 60);
 		expect(bent[mid].margin).toBeLessThan(flat[mid].margin);
+		for (const minute of [POLLS_CLOSE, POLLS_CLOSE + 30]) {
+			const i = bent.findIndex((p) => p.minute === minute);
+			expect(bent[i].margin).toBeCloseTo(flat[i].margin, 9);
+		}
+		const at = (m: number) => bent.find((p) => p.minute === m)!.margin;
+		expect(at(19 * 60) - at(17 * 60)).toBeGreaterThan(at(11 * 60) - at(9 * 60 + 30));
 	});
 
 	it('moves the projection toward Democrats while the day is young', () => {

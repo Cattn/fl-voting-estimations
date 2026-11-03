@@ -40,7 +40,6 @@
 		mail: PartyCounts;
 		turnout: number;
 		updated: string | null;
-		via?: string;
 		district?: DistrictCounts;
 	}
 
@@ -58,8 +57,7 @@
 				early: c.early,
 				mail: c.mail,
 				turnout: c.registered ? (all.total / c.registered) * 100 : 0,
-				updated: eday.total && c.updated ? fmtClock(minuteOfDay(c.updated)) : null,
-				via: c.edaySource
+				updated: eday.total && c.updated ? fmtClock(minuteOfDay(c.updated)) : null
 			};
 		})
 	);
@@ -124,7 +122,7 @@
 			],
 			note: r.district
 				? `2024: ${pres(r.district.trump24)} · estimate`
-				: `Turnout ${r.turnout.toFixed(1)}% of ${fmtInt(r.registered)} registered${r.updated ? ` · ED updated ${r.updated}` : ''}${r.via ? ` via ${r.via}` : ''}`
+				: `Turnout ${r.turnout.toFixed(1)}% of ${fmtInt(r.registered)} registered${r.updated ? ` · ED updated ${r.updated}` : ''}`
 		}))
 	);
 	const option = $derived(

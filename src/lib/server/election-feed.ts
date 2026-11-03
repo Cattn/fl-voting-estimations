@@ -1,6 +1,5 @@
 import { electionClock, UI_SWITCH_AT } from '../election-clock.ts';
 import {
-	fillMissingEday,
 	observations,
 	reconcileCounties,
 	type ElectionRecord,
@@ -9,14 +8,14 @@ import {
 } from '../live.ts';
 import { RESULTS_URL } from '../results.ts';
 import type { FeedData } from '../types.ts';
-import { carryRegistration, fetchWithRetry, getFeed, retainTodayMail, SOURCE_URL } from './feed.ts';
+import { carryRegistration, fetchWithRetry, retainTodayMail } from './feed.ts';
 import {
 	fetchResults,
 	parseReporting,
 	REPORTING_URL,
 	validateTurnout
 } from './election-sources.ts';
-import { fetchFreshTake } from './freshtake.ts';
+import { fetchFreshTake, freshTakeFeed, FRESHTAKE_URL } from './freshtake.ts';
 import { sourceText } from './http.ts';
 import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './election-store.ts';
 import { loadSnapshot, runInBackground } from './store.ts';
@@ -35,7 +34,7 @@ const health = (url: string): SourceHealth => ({
 export function emptyElection(): ElectionRecord {
 	return {
 		sources: {
-			turnout: health(SOURCE_URL),
+			turnout: health(FRESHTAKE_URL),
 			results: health(RESULTS_URL),
 			reporting: health(REPORTING_URL)
 		},
@@ -52,6 +51,15 @@ const mergeDays = <T extends { date: string }>(incoming: T[], previous: T[] = []
 	[...new Map([...previous, ...incoming].map((p) => [p.date, p])).values()].sort((a, b) =>
 		a.date.localeCompare(b.date)
 	);
+
+export async function fetchTurnout(previous?: FeedData, now = new Date()): Promise<FeedData> {
+	try {
+		return freshTakeFeed(await fetchFreshTake(), previous, now);
+	} catch (primary) {
+		console.error({ event: 'freshtake_fetch', error: (primary as Error).message });
+		return fetchWithRetry();
+	}
+}
 
 export async function collectElection(
 	previous: ElectionSnapshot | null,
@@ -72,12 +80,9 @@ export async function collectElection(
 		record.warnings.push(`The ${source} source has posted a downward correction.`);
 	};
 	const jobs = await Promise.allSettled([
-		initial ? Promise.resolve(initial) : fetchWithRetry(),
+		initial ? Promise.resolve(initial) : fetchTurnout(previous?.data, now),
 		fetchResults(now),
-		sourceText(REPORTING_URL),
-		electionClock(now).minute >= 7 * 60 && electionClock(now).minute < 24 * 60
-			? fetchFreshTake()
-			: Promise.reject(new Error('Not Election Day'))
+		sourceText(REPORTING_URL)
 	]);
 	let feed = previous?.data;
 	const failures: string[] = [];
@@ -92,8 +97,6 @@ export async function collectElection(
 	if (turnout.status === 'fulfilled') {
 		try {
 			turnout.value = carryRegistration(turnout.value, feed);
-			if (jobs[3].status === 'fulfilled')
-				turnout.value = fillMissingEday(turnout.value, jobs[3].value, 'FreshTake');
 			record.warnings.push(...validateTurnout(turnout.value, now));
 			if (feed && Date.parse(turnout.value.fetchedAt) < Date.parse(feed.fetchedAt))
 				throw new Error('Turnout response is older than the saved snapshot');
@@ -113,7 +116,7 @@ export async function collectElection(
 			);
 			record.warnings.push(...validateTurnout(feed, now));
 			record.sources.turnout = {
-				url: SOURCE_URL,
+				url: feed.source,
 				checkedAt: at,
 				acceptedAt: at,
 				updatedAt: feed.fetchedAt,
@@ -234,7 +237,7 @@ async function loadPrevious(): Promise<ElectionSnapshot | null> {
 	const election = stored.election ?? emptyElection();
 	if (!stored.election)
 		election.sources.turnout = {
-			url: SOURCE_URL,
+			url: stored.data.source,
 			checkedAt: stored.at,
 			acceptedAt: stored.at,
 			updatedAt: stored.data.fetchedAt,
@@ -255,7 +258,7 @@ async function readElection(): Promise<ElectionSnapshot> {
 	if (stored) {
 		const election = emptyElection();
 		election.sources.turnout = {
-			url: SOURCE_URL,
+			url: stored.data.source,
 			checkedAt: stored.at,
 			acceptedAt: stored.at,
 			updatedAt: stored.data.fetchedAt,
@@ -263,7 +266,7 @@ async function readElection(): Promise<ElectionSnapshot> {
 		};
 		return (cache = await collectElection({ ...stored, election }));
 	}
-	return (cache = await collectElection(null, new Date(), await getFeed()));
+	return (cache = await collectElection(null));
 }
 
 export async function getElectionSnapshot(): Promise<ElectionSnapshot> {

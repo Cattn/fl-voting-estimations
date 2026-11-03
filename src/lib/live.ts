@@ -197,33 +197,33 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 	return { ...record, baseline, history, night };
 }
 
-export function fillMissingEday(
-	data: FeedData,
-	fallback: { updated: string | null; counties: Map<string, PartyCounts> },
-	source: string
-): FeedData {
-	const key = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
-	let added = ZERO;
-	const counties = data.counties.map((c): County => {
-		const eday = fallback.counties.get(key(c.name));
-		if ((c.eday?.total ?? 0) > 0 || !eday?.total) return c;
-		added = addCounts(added, eday, scaleCounts(c.eday ?? ZERO, -1));
-		return { ...c, eday, updated: fallback.updated ?? c.updated, edaySource: source };
-	});
-	if (!added.total || !data.eday) return data;
-	return { ...data, eday: addCounts(data.eday, added), counties };
-}
+const METHODS = ['early', 'mail', 'eday'] as const;
+const dropped = (before: PartyCounts | undefined, after: PartyCounts | undefined) =>
+	!!before && (after?.total ?? 0) < before.total - Math.max(500, before.total * 0.02);
 
 export function reconcileCounties(incoming: FeedData, previous: FeedData | undefined): FeedData {
-	const carried = incoming.counties.flatMap((c) => {
+	const pairs = incoming.counties.map((c) => {
 		const old = previous?.counties.find((p) => p.code === c.code);
-		return c.status && !['live', 'ok'].includes(c.status) && old ? [{ c, old }] : [];
+		if (c.status && !['live', 'ok'].includes(c.status) && old)
+			return { c, next: { ...old, status: c.status } };
+		const next: County = { ...c };
+		for (const m of METHODS) {
+			const kept = old?.[m];
+			if (kept && dropped(kept, c[m])) next[m] = kept;
+		}
+		const same =
+			old &&
+			['rep', 'dem', 'npa', 'oth', 'total'].every(
+				(k) => old.eday?.[k as keyof PartyCounts] === next.eday?.[k as keyof PartyCounts]
+			);
+		next.edayUpdated = same ? old.edayUpdated : next.eday?.total ? c.updated : undefined;
+		return { c, next };
 	});
-	const restore = (method: 'early' | 'mail' | 'eday', statewide: PartyCounts) =>
+	const restore = (method: (typeof METHODS)[number], statewide: PartyCounts) =>
 		addCounts(
 			statewide,
-			...carried.map(({ c, old }) =>
-				addCounts(old[method] ?? ZERO, scaleCounts(c[method] ?? ZERO, -1))
+			...pairs.map(({ c, next }) =>
+				addCounts(next[method] ?? ZERO, scaleCounts(c[method] ?? ZERO, -1))
 			)
 		);
 	return {
@@ -231,17 +231,7 @@ export function reconcileCounties(incoming: FeedData, previous: FeedData | undef
 		early: restore('early', incoming.early),
 		mail: restore('mail', incoming.mail),
 		...(incoming.eday ? { eday: restore('eday', incoming.eday) } : {}),
-		counties: incoming.counties.map((c): County => {
-			const old = previous?.counties.find((p) => p.code === c.code);
-			if (c.status && !['live', 'ok'].includes(c.status) && old)
-				return { ...old, status: c.status };
-			const same =
-				old &&
-				['rep', 'dem', 'npa', 'oth', 'total'].every(
-					(k) => old.eday?.[k as keyof PartyCounts] === c.eday?.[k as keyof PartyCounts]
-				);
-			return { ...c, edayUpdated: same ? old.edayUpdated : c.eday?.total ? c.updated : undefined };
-		})
+		counties: pairs.map((p) => p.next)
 	};
 }
 

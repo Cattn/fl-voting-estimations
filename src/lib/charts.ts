@@ -472,6 +472,14 @@ export function edDayChartOption(
 	const hi = Math.ceil(Math.max(...all) + 0.6);
 	const tone = signColor(p, target ?? all[0]);
 	const pts = (rows: DayLine[]) => rows.map((d) => [d.minute, d.margin]);
+	const [prev, last] = lines.reported.slice(-2);
+	const change = lines.reported.length > 1 ? last.margin - prev.margin : null;
+	const changeText =
+		change === null
+			? ''
+			: Math.abs(change) < 0.005
+				? `No change since ${clockLabel(prev.minute)}`
+				: `${change < 0 ? 'R' : 'D'} +${Math.abs(change).toFixed(2)} since ${clockLabel(prev.minute)}`;
 	const series = (
 		name: string,
 		data: number[][],
@@ -538,6 +546,27 @@ export function edDayChartOption(
 		series: [
 			{
 				...series('Reported', pts(lines.reported), 'solid', tone, 2.5, true),
+				endLabel: {
+					show: lines.reported.length > 0,
+					backgroundColor: p.surface,
+					padding: [2, 4],
+					borderRadius: 3,
+					formatter: (o: { value: unknown }) =>
+						`{v|${fmtMargin((o.value as number[])[1], 2)}}${
+							changeText
+								? `
+{c|${changeText}}`
+								: ''
+						}`,
+					rich: {
+						v: { color: p.ink, fontSize: 11 },
+						c: {
+							color: change === null ? p.muted : signColor(p, change),
+							fontSize: 10,
+							padding: [2, 0, 0, 0]
+						}
+					}
+				},
 				markLine: {
 					silent: true,
 					symbol: 'none',

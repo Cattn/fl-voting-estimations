@@ -1,67 +1,85 @@
 import { describe, expect, it } from 'vitest';
-import fixture from '../fixtures/feed.json';
-import { parseFreshTake } from '../../src/lib/server/freshtake.ts';
-import { fillMissingEday } from '../../src/lib/live.ts';
+import { COUNTIES, freshTakeFeed, parseFreshTake } from '../../src/lib/server/freshtake.ts';
+import { reconcileCounties } from '../../src/lib/live.ts';
 import { ZERO } from '../../src/lib/election.ts';
-import type { FeedData } from '../../src/lib/types.ts';
 
-const html = `<script>
+const row = (i: number) => ({
+	voters: 100_000 + i,
+	mail: { rep: 10_000 + i, dem: 20_000, oth: 5_000 },
+	early: { rep: 30_000, dem: 10_000 + i, oth: 8_000 },
+	eday: { rep: 4_000, dem: 2_000, oth: 1_000 + i }
+});
+const page = (rows: Record<string, unknown>) => `<script>
 (function () {
-    var COUNTY_METHODS = {"Lake":{"voters":283780,"mail":{"rep":1,"dem":2,"oth":3},"early":{"rep":4,"dem":5,"oth":6},"eday":{"rep":3262,"dem":1219,"oth":1282}},"St. Johns":{"voters":10,"eday":{"rep":5,"dem":4,"oth":1}}};
+    var COUNTY_METHODS = ${JSON.stringify(rows)};
 })();
 </script>
 <p class="footnote">Last updated: 2026-11-03 08:37:02</p>
 <p class="footnote">Last updated: 2026-11-03 08:38:12</p>`;
+const all = () => Object.fromEntries(COUNTIES.map(([, name], i) => [name, row(i)]));
 
-describe('FreshTake fallback', () => {
-	it('reads Election Day by county and the latest update time', () => {
-		const parsed = parseFreshTake(html);
-		expect(parsed.counties.get('lake')).toEqual({
-			rep: 3262,
-			dem: 1219,
-			npa: 1282,
-			oth: 0,
-			total: 5763
-		});
-		expect(parsed.counties.get('stjohns')?.total).toBe(10);
+describe('FreshTake turnout source', () => {
+	it('reads every method, registration and the latest update time', () => {
+		const parsed = parseFreshTake(
+			page({
+				Lake: {
+					voters: 283780,
+					mail: { rep: 1, dem: 2, oth: 3 },
+					early: { rep: 4, dem: 5, oth: 6 },
+					eday: { rep: 3262, dem: 1219, oth: 1282 }
+				}
+			})
+		);
+		const lake = parsed.counties.get('lake')!;
+		expect(lake.registered).toBe(283780);
+		expect(lake.eday).toEqual({ rep: 3262, dem: 1219, npa: 1282, oth: 0, total: 5763 });
+		expect(lake.early.total).toBe(15);
 		expect(parsed.updated).toBe('2026-11-03T13:38:12.000Z');
 		expect(() => parseFreshTake('<html></html>')).toThrow();
 	});
 
-	it('fills only counties the main source reports at zero and keeps statewide totals in step', () => {
-		const data = structuredClone(fixture) as unknown as FeedData;
-		data.counties = data.counties.map((c) => ({
-			...c,
-			eday: c.eday ?? { ...ZERO, rep: 10, total: 10 }
-		}));
-		const lake = data.counties.find((c) => c.name === 'Lake')!;
-		lake.eday = { ...ZERO };
-		const other = data.counties.find((c) => c.name !== 'Lake')!;
-		other.eday = { ...ZERO, rep: 40, dem: 30, total: 70 };
-		data.eday = data.counties.reduce(
-			(sum, c) => ({
-				rep: sum.rep + c.eday!.rep,
-				dem: sum.dem + c.eday!.dem,
-				npa: sum.npa + c.eday!.npa,
-				oth: sum.oth + c.eday!.oth,
-				total: sum.total + c.eday!.total
-			}),
-			{ ...ZERO }
+	it('builds a full feed whose statewide totals add up from the counties', () => {
+		const feed = freshTakeFeed(parseFreshTake(page(all())));
+		expect(feed.counties).toHaveLength(67);
+		expect(feed.counties.every((c) => c.registered > 0 && c.status === 'live')).toBe(true);
+		for (const m of ['early', 'mail', 'eday'] as const)
+			expect(feed[m]!.total).toBe(feed.counties.reduce((n, c) => n + c[m]!.total, 0));
+		expect(feed.fetchedAt).toBe('2026-11-03T13:38:12.000Z');
+		const rows = all();
+		delete rows['St. Johns'];
+		expect(() => freshTakeFeed(parseFreshTake(page(rows)))).toThrow(/St\. Johns/);
+	});
+
+	it('splits combined other voters like the previous feed and keeps unchanged report times', () => {
+		const first = freshTakeFeed(parseFreshTake(page(all())));
+		const previous = structuredClone(first);
+		const ala = previous.counties[0];
+		ala.early = { ...ala.early, npa: 6_000, oth: 2_000 };
+		ala.updated = '2026-11-03T12:00:00.000Z';
+		const next = freshTakeFeed(parseFreshTake(page(all())), previous);
+		expect(next.counties[0].early).toMatchObject({ npa: 6_000, oth: 2_000, total: ala.early.total });
+		expect(next.counties[0].updated).toBe('2026-11-03T12:00:00.000Z');
+	});
+
+	it('keeps a county’s last counts when a source suddenly drops them', () => {
+		const previous = freshTakeFeed(parseFreshTake(page(all())));
+		const incoming = structuredClone(previous);
+		const bro = incoming.counties.find((c) => c.code === 'BRO')!;
+		const kept = previous.counties.find((c) => c.code === 'BRO')!;
+		incoming.early = { ...incoming.early, total: incoming.early.total - bro.early.total };
+		incoming.early.rep -= bro.early.rep;
+		incoming.early.dem -= bro.early.dem;
+		incoming.early.npa -= bro.early.npa;
+		incoming.early.oth -= bro.early.oth;
+		bro.early = { ...ZERO };
+		const fixed = reconcileCounties(incoming, previous);
+		expect(fixed.counties.find((c) => c.code === 'BRO')!.early).toEqual(kept.early);
+		expect(fixed.early).toEqual(previous.early);
+		const small = structuredClone(previous);
+		small.counties[0].mail = { ...small.counties[0].mail, rep: small.counties[0].mail.rep - 1 };
+		small.counties[0].mail.total -= 1;
+		expect(reconcileCounties(small, previous).counties[0].mail.total).toBe(
+			previous.counties[0].mail.total - 1
 		);
-		const parsed = parseFreshTake(html);
-		parsed.counties.delete('stjohns');
-		parsed.counties.set(other.name.toLowerCase().replace(/[^a-z]/g, ''), {
-			...ZERO,
-			rep: 999_999,
-			total: 999_999
-		});
-		const filled = fillMissingEday(data, parsed, 'FreshTake');
-		const after = filled.counties.find((c) => c.name === 'Lake')!;
-		expect(after.eday?.total).toBe(5763);
-		expect(after.edaySource).toBe('FreshTake');
-		expect(after.updated).toBe(parsed.updated);
-		expect(filled.counties.find((c) => c.name === other.name)!.eday).toEqual(other.eday);
-		expect(filled.eday!.total).toBe(data.eday.total + 5763);
-		expect(filled.eday!.rep).toBe(data.eday.rep + 3262);
 	});
 });

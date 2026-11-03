@@ -522,6 +522,7 @@ export function dayPaths(
 				) / countyTotal
 			: dayShare(minute);
 	const startShare = shareAt(s.minute);
+	const eastStart = dayShare(s.minute);
 	const project = (margin: number) => {
 		const out: DayPoint[] = [{ minute: s.minute, margin: total(s.eday, s.mail) }];
 		for (let m = Math.ceil((s.minute + 1) / 30) * 30; m <= POLLS_CLOSE + 60; m += 30) {
@@ -529,10 +530,9 @@ export function dayPaths(
 			const ed = o.rest.total * (m >= POLLS_CLOSE + 60 ? 1 : f);
 			const mailK =
 				m >= RESULTS_START ? 1 : Math.min(1, (m - s.minute) / (RESULTS_START - s.minute));
-			const bent = Math.max(
-				-100,
-				Math.min(100, margin + shift * (1 - startShare) * (Math.min(1, f) - 1))
-			);
+			const g =
+				eastStart >= 1 ? 1 : Math.max(0, Math.min(1, (dayShare(m) - eastStart) / (1 - eastStart)));
+			const bent = Math.max(-100, Math.min(100, margin + shift * (1 - startShare) * (g * g - 1)));
 			const add = {
 				rep: (ed * (100 - bent)) / 200,
 				dem: (ed * (100 + bent)) / 200,
