@@ -183,8 +183,31 @@ const turnoutClock = new Intl.DateTimeFormat('en-US', {
 	hourCycle: 'h23'
 });
 
-const clockParts = (iso: string) =>
-	Object.fromEntries(turnoutClock.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+const EASTERN_OFFSET = (() => {
+	const at = Date.parse(`${ELECTION_DAY}T17:00:00Z`);
+	const p = Object.fromEntries(
+		turnoutClock.formatToParts(new Date(at)).map((x) => [x.type, Number(x.value)])
+	);
+	return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - at;
+})();
+const partsCache = new Map<string, Record<string, string>>();
+const clockParts = (iso: string) => {
+	let parts = partsCache.get(iso);
+	if (!parts) {
+		if (partsCache.size > 5000) partsCache.clear();
+		const local = new Date(Date.parse(iso) + EASTERN_OFFSET);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		parts = {
+			year: String(local.getUTCFullYear()),
+			month: pad(local.getUTCMonth() + 1),
+			day: pad(local.getUTCDate()),
+			hour: pad(local.getUTCHours()),
+			minute: pad(local.getUTCMinutes())
+		};
+		partsCache.set(iso, parts);
+	}
+	return parts;
+};
 
 const reportMinute = (updated: string | undefined, minute: number) => {
 	if (!updated || !Number.isFinite(Date.parse(updated))) return minute;
@@ -194,7 +217,18 @@ const reportMinute = (updated: string | undefined, minute: number) => {
 	return Math.min(minute, Number(parts.hour) * 60 + Number(parts.minute));
 };
 
+const estimateCache = new WeakMap<EdState, TurnoutEstimates>();
+
 export function turnoutEstimates(s: EdState): TurnoutEstimates {
+	let cached = estimateCache.get(s);
+	if (!cached) {
+		cached = computeTurnoutEstimates(s);
+		estimateCache.set(s, cached);
+	}
+	return cached;
+}
+
+function computeTurnoutEstimates(s: EdState): TurnoutEstimates {
 	const pool = notYetVoted(s);
 	const observed = otherCombined(s.eday);
 	const capacity = { rep: pool.rep, dem: pool.dem, npa: pool.oth };
@@ -295,6 +329,14 @@ export function turnoutEstimates(s: EdState): TurnoutEstimates {
 		);
 	}
 	const support = 0.5 + 0.5 * clamp((projected.length - 1) / 3);
+	const reportsByCounty = new Map<string, NonNullable<EdSnapshot['counties']>>();
+	for (const h of recent)
+		for (const r of h.counties ?? [])
+			if ((r.eday?.total ?? 0) > 0) {
+				const list = reportsByCounty.get(r.code);
+				if (list) list.push(r);
+				else reportsByCounty.set(r.code, [r]);
+			}
 	let influence = 0;
 	let coverage = 0;
 	const residuals = counties.map((c, i) => {
@@ -304,9 +346,7 @@ export function turnoutEstimates(s: EdState): TurnoutEstimates {
 		const share = dayShare(localMinute(c.code, at));
 		const validTime = !!updated && Number.isFinite(Date.parse(updated));
 		const freshness = (validTime ? 1 : 0.5) * Math.exp(-Math.max(0, s.minute - at - 30) / 90);
-		const countyReports = recent.flatMap(
-			(h) => h.counties?.filter((r) => r.code === c.code && (r.eday?.total ?? 0) > 0) ?? []
-		);
+		const countyReports = reportsByCounty.get(c.code) ?? [];
 		const distinctReports = countyReports.filter(
 			(r, j) =>
 				!j ||
