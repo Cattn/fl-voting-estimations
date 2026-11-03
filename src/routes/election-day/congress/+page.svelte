@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DistrictResultsMap from '#lib/components/DistrictResultsMap.svelte';
 	import Info from '#lib/components/Info.svelte';
 	import { addCounts, ZERO } from '#lib/election.ts';
 	import { fmtInt, fmtMargin, marginOf } from '#lib/model.ts';
@@ -188,6 +189,16 @@
 			<p class="text-muted text-sm">Closest races appear once votes are reported.</p>
 		{/each}
 	</div>
+</section>
+
+<section class="card mb-4 p-4">
+	<h2 class="mb-3 flex items-center text-base font-semibold">
+		District map<Info align="left"
+			>Candidate margin in each district on the 2026 lines. Uncontested seats are shaded for the
+			unopposed party; districts without votes stay gray.</Info
+		>
+	</h2>
+	<DistrictResultsMap {rows} />
 </section>
 
 <section class="card mb-4 p-4">
