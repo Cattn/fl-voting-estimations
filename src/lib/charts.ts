@@ -474,12 +474,10 @@ export function edDayChartOption(
 	const pts = (rows: DayLine[]) => rows.map((d) => [d.minute, d.margin]);
 	const [prev, last] = lines.reported.slice(-2);
 	const change = lines.reported.length > 1 ? last.margin - prev.margin : null;
-	const changeText =
+	const changeRow =
 		change === null
 			? ''
-			: Math.abs(change) < 0.005
-				? `No change since ${clockLabel(prev.minute)}`
-				: `${change < 0 ? 'R' : 'D'} +${Math.abs(change).toFixed(2)} since ${clockLabel(prev.minute)}`;
+			: `<div style="display:flex;gap:12px;justify-content:space-between"><span>Since ${clockLabel(prev.minute)}</span><b style="color:${Math.abs(change) < 0.005 ? p.muted : signColor(p, change)}">${Math.abs(change) < 0.005 ? 'No change' : `${change < 0 ? 'R' : 'D'}+${Math.abs(change).toFixed(2)}`}</b></div>`;
 	const series = (
 		name: string,
 		data: number[][],
@@ -520,7 +518,9 @@ export function edDayChartOption(
 				const body = rows
 					.map(
 						(r) =>
-							`<div style="display:flex;gap:12px;justify-content:space-between"><span>${r.seriesName}</span><b style="color:${signColor(p, r.value[1])}">${fmtMargin(r.value[1], 2)}</b></div>`
+							`<div style="display:flex;gap:12px;justify-content:space-between"><span>${r.seriesName}</span><b style="color:${signColor(p, r.value[1])}">${fmtMargin(r.value[1], 2)}</b></div>${
+								r.seriesName === 'Reported' && last && r.value[0] === last.minute ? changeRow : ''
+							}`
 					)
 					.join('');
 				return `<div style="min-width:170px"><div style="font-weight:600;margin-bottom:4px">${clockLabel(rows[0].value[0])} ET</div>${body}</div>`;
@@ -546,27 +546,6 @@ export function edDayChartOption(
 		series: [
 			{
 				...series('Reported', pts(lines.reported), 'solid', tone, 2.5, true),
-				endLabel: {
-					show: lines.reported.length > 0,
-					backgroundColor: p.surface,
-					padding: [2, 4],
-					borderRadius: 3,
-					formatter: (o: { value: unknown }) =>
-						`{v|${fmtMargin((o.value as number[])[1], 2)}}${
-							changeText
-								? `
-{c|${changeText}}`
-								: ''
-						}`,
-					rich: {
-						v: { color: p.ink, fontSize: 11 },
-						c: {
-							color: change === null ? p.muted : signColor(p, change),
-							fontSize: 10,
-							padding: [2, 0, 0, 0]
-						}
-					}
-				},
 				markLine: {
 					silent: true,
 					symbol: 'none',
