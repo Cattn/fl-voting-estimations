@@ -112,6 +112,20 @@ export interface EdState {
 	lateMailEstimate?: boolean;
 }
 
+export function cleanHistory(points: EdSnapshot[]): EdSnapshot[] {
+	const fell = (a: EdSnapshot, b: EdSnapshot) =>
+		(['mail', 'eday'] as const).some(
+			(k) => a[k].total - b[k].total > Math.max(5000, a[k].total * 0.01)
+		);
+	const kept: EdSnapshot[] = [];
+	points.forEach((h, i) => {
+		const prev = kept.at(-1);
+		if (prev && fell(prev, h) && points.slice(i + 1).some((q) => !fell(prev, q))) return;
+		kept.push(h);
+	});
+	return kept;
+}
+
 export function notYetVoted(s: EdState): { rep: number; dem: number; oth: number } {
 	const voted = addCounts(s.early, s.mail);
 	const registered = s.registration ?? REGISTRATION;

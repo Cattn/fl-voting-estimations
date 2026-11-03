@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	addCounts,
+	cleanHistory,
 	dayShare,
 	dayPaths,
 	edOutcome,
@@ -482,5 +483,37 @@ describe('Election Day notice', () => {
 			'Turnout source updating (64/67 counties) · Late-mail estimate paused · Results data delayed · result projections paused'
 		);
 		expect(electionNotice(view(600, []))).toBeNull();
+	});
+});
+
+describe('Election Day history cleanup', () => {
+	const point = (minute: number, mail: number, eday: number) => ({
+		minute,
+		mail: { ...ZERO, dem: mail / 2, rep: mail / 2, total: mail },
+		eday: { ...ZERO, dem: eday / 2, rep: eday / 2, total: eday }
+	});
+
+	it('drops a point where totals fell and then came back', () => {
+		const history = [
+			point(468, 2_003_009, 134_284),
+			point(471, 1_853_318, 149_940),
+			point(474, 2_003_366, 160_964)
+		];
+		expect(cleanHistory(history).map((h) => h.minute)).toEqual([468, 474]);
+		const dipped = [point(468, 2_003_009, 134_284), point(471, 2_003_100, 20_000)];
+		expect(cleanHistory([...dipped, point(474, 2_003_200, 140_000)])).toHaveLength(2);
+	});
+
+	it('keeps lasting corrections, small revisions and the latest point', () => {
+		const lasting = [
+			point(468, 2_003_009, 134_284),
+			point(471, 1_950_000, 140_000),
+			point(474, 1_951_000, 150_000)
+		];
+		expect(cleanHistory(lasting)).toHaveLength(3);
+		const small = [point(468, 2_003_009, 134_284), point(471, 1_990_000, 131_000)];
+		expect(cleanHistory([...small, point(474, 2_003_100, 140_000)])).toHaveLength(3);
+		const last = [point(468, 2_003_009, 134_284), point(471, 1_853_318, 149_940)];
+		expect(cleanHistory(last)).toHaveLength(2);
 	});
 });

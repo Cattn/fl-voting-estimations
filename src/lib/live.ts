@@ -1,4 +1,4 @@
-import { addCounts, ZERO, type EdSnapshot, type EdState } from './election.ts';
+import { addCounts, cleanHistory, ZERO, type EdSnapshot, type EdState } from './election.ts';
 import { ELECTION_DAY, marginOf } from './model.ts';
 import { countedMix, raceMargin, tallyRaces, type ResultRow } from './results.ts';
 import { electionClock } from './election-clock.ts';
@@ -101,7 +101,7 @@ export function electionState(snapshot: ElectionSnapshot, now = new Date()): EdS
 		mail: feed.mail,
 		evMail: snapshot.election.baseline?.mail ?? feed.mail,
 		eday: feed.eday ?? addCounts(...feed.counties.map((c) => c.eday ?? ZERO)),
-		history: snapshot.election.history,
+		history: cleanHistory(snapshot.election.history),
 		turnoutFinal: turnoutIsFinal(snapshot, now),
 		completedCounties: snapshot.election.reporting
 			.filter((r) => {
@@ -145,10 +145,10 @@ export function observations(snapshot: ElectionSnapshot, now: Date): ElectionRec
 			const bucket = Math.floor(p.minute / 30);
 			if (p.minute < minute - 120 && !coarse.has(bucket)) coarse.set(bucket, p);
 		}
-		history = [
+		history = cleanHistory([
 			...coarse.values(),
 			...[...points.values()].filter((p) => p.minute >= minute - 120)
-		].slice(-80);
+		]).slice(-80);
 	}
 	let night = record.night;
 	if (
