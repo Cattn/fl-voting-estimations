@@ -7,6 +7,8 @@ import {
 	edOutcome,
 	edProjection,
 	edScenarios,
+	INTRADAY_SHIFT,
+	intradayShift,
 	halfHourRows,
 	lateMailRemaining,
 	localMinute,
@@ -515,5 +517,65 @@ describe('Election Day history cleanup', () => {
 		expect(cleanHistory([...small, point(474, 2_003_100, 140_000)])).toHaveLength(3);
 		const last = [point(468, 2_003_009, 134_284), point(471, 1_853_318, 149_940)];
 		expect(cleanHistory(last)).toHaveLength(2);
+	});
+});
+
+describe('Later-voter shift', () => {
+	const votes = (rep: number, dem: number, npa = 0): PartyCounts => ({
+		rep,
+		dem,
+		npa,
+		oth: 0,
+		total: rep + dem + npa
+	});
+	const at = (
+		minute: number,
+		eday: PartyCounts,
+		history: { minute: number; eday: PartyCounts }[]
+	) =>
+		({
+			...sampleElection(feed, minute).state,
+			minute,
+			eday,
+			history: history.map((h) => ({ ...h, mail: ZERO }))
+		}) as EdState;
+
+	it('starts at the dampened default and fades by poll close', () => {
+		expect(intradayShift(at(POLLS_OPEN, ZERO, []), 0)).toBeCloseTo(INTRADAY_SHIFT, 6);
+		expect(intradayShift(at(POLLS_CLOSE, ZERO, []), 0)).toBeCloseTo(0, 6);
+		const noon = intradayShift(at(12 * 60, ZERO, []), 0);
+		expect(noon).toBeGreaterThan(0);
+		expect(noon).toBeLessThan(INTRADAY_SHIFT);
+	});
+
+	it('grows when recent votes run bluer than the day so far, and shrinks when they do not', () => {
+		const morning = votes(600_000, 300_000, 100_000);
+		const bluer = at(15 * 60, addCounts(morning, votes(150_000, 150_000, 50_000)), [
+			{ minute: 13 * 60, eday: morning }
+		]);
+		const same = at(15 * 60, addCounts(morning, votes(210_000, 105_000, 35_000)), [
+			{ minute: 13 * 60, eday: morning }
+		]);
+		const prior = intradayShift(at(15 * 60, ZERO, []), 0);
+		expect(intradayShift(bluer, 0.5)).toBeGreaterThan(prior);
+		expect(intradayShift(same, 0.5)).toBeLessThan(prior);
+		expect(intradayShift(bluer, 0)).toBeCloseTo(prior, 6);
+		expect(intradayShift(bluer, 1)).toBeLessThanOrEqual(15);
+	});
+
+	it('bends the projected line so the bluer votes arrive late, ending in the same place', () => {
+		const { state } = sampleElection(feed, 9 * 60);
+		const outcome = edOutcome(state, liveTurnout(state).turnout, -8.5);
+		const flat = dayPaths(state, outcome).live;
+		const bent = dayPaths(state, outcome, 3).live;
+		expect(bent.at(-1)!.margin).toBeCloseTo(flat.at(-1)!.margin, 9);
+		const mid = bent.findIndex((p) => p.minute === 14 * 60);
+		expect(bent[mid].margin).toBeLessThan(flat[mid].margin);
+	});
+
+	it('moves the projection toward Democrats while the day is young', () => {
+		const p = edProjection(sampleElection(feed, 9 * 60).state);
+		expect(p.shift).toBeGreaterThan(0);
+		expect(p.trend!).toBeCloseTo(Math.max(-100, Math.min(100, p.base.restMargin + p.shift)), 6);
 	});
 });

@@ -449,10 +449,23 @@ export function edScenarios(
 }
 
 export const TREND_GAP = 20;
+export const INTRADAY_SHIFT = 3.5;
+export const SHIFT_WINDOW = 90;
+
+export function intradayShift(s: EdState, share: number): number {
+	const prior = INTRADAY_SHIFT * (1 - dayShare(s.minute));
+	const past = s.history.findLast((h) => h.minute <= s.minute - SHIFT_WINDOW);
+	if (!past || !s.eday.total) return prior;
+	const recent = addCounts(s.eday, scaleCounts(past.eday, -1));
+	if (recent.total < Math.max(20_000, 0.1 * s.eday.total)) return prior;
+	const observed = Math.max(-4, Math.min(10, marginOf(recent) - marginOf(s.eday)));
+	return prior + (observed - prior) * Math.min(0.5, Math.max(0, share));
+}
 
 export interface EdProjection {
 	base: EdOutcome;
 	trend: number | null;
+	shift: number;
 	weight: number;
 	restMargin: number;
 	edMargin: number;
@@ -464,7 +477,8 @@ export function edProjection(s: EdState, target = DEFAULT_TARGET): EdProjection 
 	const base = edOutcome(s, turnoutEstimates(s).live.turnout, target);
 	const bounded = (v: number) => Math.max(-100, Math.min(100, v));
 	const needed = bounded(base.needed ?? 0);
-	const trend = s.eday.total && base.rest.total ? bounded(base.restMargin) : null;
+	const shift = s.eday.total && base.rest.total ? intradayShift(s, base.share) : 0;
+	const trend = s.eday.total && base.rest.total ? bounded(base.restMargin + shift) : null;
 	const weight =
 		trend === null ? 0 : clamp(base.share * (1 + Math.abs(needed - trend) / TREND_GAP));
 	const restMargin = trend === null ? needed : needed + (trend - needed) * weight;
@@ -476,6 +490,7 @@ export function edProjection(s: EdState, target = DEFAULT_TARGET): EdProjection 
 	return {
 		base,
 		trend,
+		shift,
 		weight,
 		restMargin,
 		edMargin: edTotal ? ((gapOf(s.eday) + restGap) / edTotal) * 100 : 0,
@@ -491,7 +506,8 @@ export interface DayPoint {
 
 export function dayPaths(
 	s: EdState,
-	o: EdOutcome
+	o: EdOutcome,
+	shift = 0
 ): { reported: DayPoint[]; path: DayPoint[]; live: DayPoint[] } {
 	const total = (eday: PartyCounts, mail: PartyCounts) => marginOf(addCounts(s.early, mail, eday));
 	const reported = s.history.map((h) => ({ minute: h.minute, margin: total(h.eday, h.mail) }));
@@ -513,9 +529,13 @@ export function dayPaths(
 			const ed = o.rest.total * (m >= POLLS_CLOSE + 60 ? 1 : f);
 			const mailK =
 				m >= RESULTS_START ? 1 : Math.min(1, (m - s.minute) / (RESULTS_START - s.minute));
+			const bent = Math.max(
+				-100,
+				Math.min(100, margin + shift * (1 - startShare) * (Math.min(1, f) - 1))
+			);
 			const add = {
-				rep: (ed * (100 - margin)) / 200,
-				dem: (ed * (100 + margin)) / 200,
+				rep: (ed * (100 - bent)) / 200,
+				dem: (ed * (100 + bent)) / 200,
 				npa: 0,
 				oth: 0,
 				total: ed

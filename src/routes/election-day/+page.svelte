@@ -84,8 +84,15 @@
 
 	const paths = $derived(
 		custom
-			? { ...dayPaths(ed, outcome), live: [] }
-			: { ...dayPaths(ed, { ...projection.base, restMargin: projection.restMargin }), path: [] }
+			? { ...dayPaths(ed, outcome, projection.shift), live: [] }
+			: {
+					...dayPaths(
+						ed,
+						{ ...projection.base, restMargin: projection.restMargin },
+						projection.shift
+					),
+					path: []
+				}
 	);
 	const visible = (hidden: Record<string, boolean>) =>
 		Object.fromEntries(Object.entries(hidden).map(([k, v]) => [k, !v]));
