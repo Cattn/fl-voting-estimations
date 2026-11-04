@@ -29,6 +29,15 @@ export interface DayCounts extends PartyCounts {
 	counties?: CountyDayCounts[];
 }
 
+export interface StatewideRace {
+	race: string;
+	title: string;
+	reporting: number;
+	precincts: number;
+	counties: number;
+	candidates: { name: string; party: string; votes: number }[];
+}
+
 export interface FeedData {
 	source: string;
 	stale?: string;
@@ -41,6 +50,7 @@ export interface FeedData {
 	early: PartyCounts;
 	eday?: PartyCounts;
 	outstanding: PartyCounts;
+	statewide?: { updated: string | null; races: StatewideRace[] };
 	counties: County[];
 	earlyDays: DayCounts[];
 	mailDays: DayCounts[];

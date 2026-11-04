@@ -3,7 +3,14 @@
 	import Info from '#lib/components/Info.svelte';
 	import ResultsMap from '#lib/components/ResultsMap.svelte';
 	import { resultsNightChartOption, type NightPoint } from '#lib/charts.ts';
-	import { addCounts, edOutcome, fmtClock, liveTurnout, RESULTS_START } from '#lib/election.ts';
+	import {
+		addCounts,
+		edOutcome,
+		fmtClock,
+		liveTurnout,
+		minuteOfDay,
+		RESULTS_START
+	} from '#lib/election.ts';
 	import { DEFAULT_TARGET, fmtInt, fmtLead, fmtMargin, marginOf } from '#lib/model.ts';
 	import {
 		countedMix,
@@ -79,7 +86,55 @@
 	{/if}
 </div>
 
-{#if !started}
+{#if !started && data.statewide?.races.length}
+	<section class="card mb-4 p-4">
+		<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+			<h3 class="flex items-center font-semibold">
+				Preliminary statewide results<Info align="left"
+					>Statewide totals collected from county election websites by FreshTake, shown until the
+					state's official county-by-county file starts posting votes. Counties, maps and
+					projections fill in once it does.</Info
+				>
+			</h3>
+			<span class="text-muted text-xs"
+				>via FreshTake{data.statewide.updated
+					? ` · ${fmtClock(minuteOfDay(data.statewide.updated))} ET`
+					: ''}</span
+			>
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			{#each data.statewide.races as r (r.race)}
+				{@const total = r.candidates.reduce((n, c) => n + c.votes, 0)}
+				<div class="rounded-lg border p-3" style:border-color="var(--border)">
+					<div class="mb-2 flex justify-between gap-2">
+						<b class="text-sm">{r.title.replace(/^Florida /, '')}</b>
+						<span class="text-muted num text-xs"
+							>{r.precincts ? Math.round((r.reporting / r.precincts) * 100) : 0}% precincts</span
+						>
+					</div>
+					{#each r.candidates as c (c.name)}
+						<div class="num flex justify-between gap-2 text-sm">
+							<span
+								class="truncate {c.party === 'REP'
+									? 'text-rep'
+									: c.party === 'DEM'
+										? 'text-dem'
+										: ''}">{c.name} ({c.party})</span
+							>
+							<span class="whitespace-nowrap"
+								>{fmtInt(c.votes)} ·
+								<b>{total ? ((c.votes / total) * 100).toFixed(1) : '0.0'}%</b></span
+							>
+						</div>
+					{/each}
+					<div class="text-muted mt-2 text-xs">
+						{r.counties} counties reporting · {fmtInt(r.reporting)} of {fmtInt(r.precincts)} precincts
+					</div>
+				</div>
+			{/each}
+		</div>
+	</section>
+{:else if !started}
 	<section class="card mb-4 p-4">
 		<h3 class="font-semibold">Results after 7 PM ET</h3>
 		<p class="text-muted text-sm">

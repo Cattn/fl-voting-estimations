@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { COUNTIES, freshTakeFeed, parseFreshTake } from '../../src/lib/server/freshtake.ts';
+import {
+	COUNTIES,
+	freshTakeFeed,
+	parseFreshTake,
+	parseFreshTakeRaces
+} from '../../src/lib/server/freshtake.ts';
 import { reconcileCounties } from '../../src/lib/live.ts';
 import { ZERO } from '../../src/lib/election.ts';
 
@@ -126,5 +131,35 @@ describe('drop guard timing', () => {
 		expect(broEarly(feed)).toBe(full + 500);
 		expect(feed.counties.find((c) => c.code === 'BRO')!.heldSince).toBeUndefined();
 		expect(feed.early.total).toBe(feed.counties.reduce((n, c) => n + c.early.total, 0));
+	});
+});
+
+describe('FreshTake statewide race totals', () => {
+	const card = (title: string, rows: string) => `<div class="card">
+		<p class="card__title">${title}</p>
+		<p class="race-precincts"><span>Precincts Reporting: 544 / 4,648</span></p>
+		<div class="race-candidates">${rows}</div>
+		<p class="footnote race-footnote">Source: <i>62 counties, via each County Supervisor of Elections</i></p>
+	</div>`;
+	const row = (name: string, votes: string) => `<div class="race-candidate-row">
+		<div class="race-candidate-name" title="${name}">x</div>
+		<div class="race-bar-label">${votes} &middot; 53.79%</div></div>`;
+
+	it('reads statewide races, candidates and precincts, skipping other cards', () => {
+		const html =
+			card(
+				'Florida Governor',
+				row('David Jolly / Gwen Graham (DEM)', '2,422,938') +
+					row('Byron Donalds / Bryan Avila (REP)', '2,081,125')
+			) +
+			card('U.S. Senator', row('Ashley Moody (REP)', '2,028,031')) +
+			card('2026 General: Statewide Voter Turnout', '');
+		const races = parseFreshTakeRaces(html);
+		expect(races.map((r) => r.race)).toEqual(['GOV', 'USS']);
+		expect(races[0]).toMatchObject({ reporting: 544, precincts: 4648, counties: 62 });
+		expect(races[0].candidates).toEqual([
+			{ name: 'David Jolly / Gwen Graham', party: 'DEM', votes: 2422938 },
+			{ name: 'Byron Donalds / Bryan Avila', party: 'REP', votes: 2081125 }
+		]);
 	});
 });

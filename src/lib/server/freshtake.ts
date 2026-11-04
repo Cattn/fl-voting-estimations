@@ -1,4 +1,4 @@
-import type { County, FeedData, PartyCounts } from '../types.ts';
+import type { County, FeedData, PartyCounts, StatewideRace } from '../types.ts';
 import { sourceText } from './http.ts';
 
 export const FRESHTAKE_URL = 'https://www.freshtake.vote/2026G/';
@@ -83,6 +83,51 @@ export interface FreshTakeCounty {
 export interface FreshTakeData {
 	updated: string | null;
 	counties: Map<string, FreshTakeCounty>;
+	races?: StatewideRace[];
+}
+
+const RACE_CODES: Record<string, string> = {
+	'Florida Governor': 'GOV',
+	'U.S. Senator': 'USS',
+	'Florida Attorney General': 'ATG',
+	'Florida Chief Financial Officer': 'CFO',
+	'Florida Commissioner of Agriculture': 'AGR'
+};
+
+const plain = (s: string) =>
+	s
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/&amp;/g, '&')
+		.replace(/&quot;/g, '"')
+		.replace(/&#0?39;/g, "'")
+		.replace(/\s+/g, ' ')
+		.trim();
+const count = (s: string) => Number(s.replace(/,/g, ''));
+
+export function parseFreshTakeRaces(html: string): StatewideRace[] {
+	const races: StatewideRace[] = [];
+	for (const card of html.split('<div class="card">').slice(1)) {
+		const title = plain(card.match(/card__title">([^<]+)</)?.[1] ?? '');
+		const race = RACE_CODES[title] ?? (/^Amendment \w+$/.test(title) ? 'AMD' : null);
+		if (!race) continue;
+		const precincts = card.match(/Precincts Reporting:\s*([\d,]+)\s*\/\s*([\d,]+)/);
+		const candidates = [
+			...card.matchAll(
+				/race-candidate-name" title="([^"]+)\(([A-Z]{2,4})\)"[\s\S]*?race-bar-label">([\d,]+)/g
+			)
+		].map((m) => ({ name: plain(m[1]), party: m[2], votes: count(m[3]) }));
+		if (!precincts || !candidates.length || candidates.some((c) => !Number.isFinite(c.votes)))
+			continue;
+		races.push({
+			race,
+			title,
+			reporting: count(precincts[1]),
+			precincts: count(precincts[2]),
+			counties: Number(card.match(/Source:\s*<i>(\d+) counties/)?.[1] ?? 0),
+			candidates
+		});
+	}
+	return races;
 }
 
 export const countyKey = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
@@ -117,7 +162,13 @@ export function parseFreshTake(html: string): FreshTakeData {
 		.map((m) => new Date(`${m[1]}T${m[2]}-05:00`))
 		.filter((d) => !Number.isNaN(d.getTime()));
 	const latest = times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : null;
-	return { updated: latest?.toISOString() ?? null, counties };
+	let races: StatewideRace[] = [];
+	try {
+		races = parseFreshTakeRaces(html);
+	} catch {
+		races = [];
+	}
+	return { updated: latest?.toISOString() ?? null, counties, races };
 }
 
 const split = (c: PartyCounts, ref: PartyCounts | undefined): PartyCounts => {
@@ -173,7 +224,8 @@ export function freshTakeFeed(ft: FreshTakeData, previous?: FeedData, now = new 
 		counties,
 		earlyDays: previous?.earlyDays ?? [],
 		mailDays: previous?.mailDays ?? [],
-		...(previous?.lastReportedMail ? { lastReportedMail: previous.lastReportedMail } : {})
+		...(previous?.lastReportedMail ? { lastReportedMail: previous.lastReportedMail } : {}),
+		...(ft.races?.length ? { statewide: { updated, races: ft.races } } : {})
 	};
 }
 

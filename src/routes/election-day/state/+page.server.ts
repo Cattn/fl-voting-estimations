@@ -11,6 +11,7 @@ export const load: PageServerLoad = async ({ depends, parent }) => {
 		return {
 			results: snapshot.election.results,
 			night: snapshot.election.night,
+			statewide: snapshot.data.statewide ?? null,
 			projectable: viewElection(snapshot, new Date(serverClock.now)).projectable
 		};
 	} catch (e) {
