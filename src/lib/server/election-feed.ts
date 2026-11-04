@@ -17,6 +17,10 @@ import {
 } from './election-sources.ts';
 import { FRESHTAKE_URL } from './freshtake.ts';
 import { sourceText } from './http.ts';
+import { fetchCalls } from './calls.ts';
+import { RESULTS_START } from '../election.ts';
+
+const CALLS_INTERVAL = 15 * 60_000;
 import { COLLECTION_INTERVAL, loadElectionDatabase, persistElection } from './election-store.ts';
 import { loadSnapshot } from './store.ts';
 
@@ -67,8 +71,17 @@ export async function collectElection(
 	const jobs = await Promise.allSettled([
 		initial ? Promise.resolve(initial) : fetchTurnout(previous?.data, now),
 		fetchResults(now),
-		sourceText(REPORTING_URL)
+		sourceText(REPORTING_URL),
+		electionClock(now).minute >= RESULTS_START &&
+		(!old.calls ||
+			Math.floor(at / CALLS_INTERVAL) > Math.floor(old.calls.checkedAt / CALLS_INTERVAL))
+			? fetchCalls(now)
+			: Promise.resolve(null)
 	]);
+	const calls = jobs[3];
+	if (calls.status === 'fulfilled' && calls.value) record.calls = calls.value;
+	else if (calls.status === 'rejected')
+		console.error({ event: 'calls_fetch', error: (calls.reason as Error).message });
 	let feed = previous?.data;
 	const failures: string[] = [];
 	for (const name of ['turnout', 'results', 'reporting'] as const)

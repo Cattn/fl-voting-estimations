@@ -29,6 +29,11 @@ export interface DayCounts extends PartyCounts {
 	counties?: CountyDayCounts[];
 }
 
+export interface RaceCalls {
+	checkedAt: number;
+	races: Record<string, { name: string; lastName: string; party: string }>;
+}
+
 export interface StatewideRace {
 	race: string;
 	title: string;

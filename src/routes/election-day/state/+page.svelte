@@ -51,6 +51,9 @@
 	const others = $derived(race ? race.total - (rep?.votes ?? 0) - (dem?.votes ?? 0) : 0);
 	const margin = $derived(race ? raceMargin(race) : 0);
 	const leader = $derived(margin < 0 ? rep : dem);
+	const call = $derived(data.calls[tab] ?? null);
+	const callColor = (party: string) =>
+		party === 'REP' ? 'var(--rep)' : party === 'DEM' ? 'var(--dem)' : 'var(--ink-2)';
 	const share = (v: number) => (race?.total ? (v / race.total) * 100 : 0);
 	const counties = $derived(ed.counties.filter((c) => c.registered).length);
 	const complete = $derived(
@@ -151,7 +154,12 @@
 			role="tab"
 			class:btn-primary={tab === t.race}
 			aria-selected={tab === t.race}
-			onclick={() => (tab = t.race)}>{t.label}</button
+			onclick={() => (tab = t.race)}
+			>{#if data.calls[t.race]}<span
+					aria-label="called"
+					class="mr-1"
+					style:color={callColor(data.calls[t.race].party)}>✓</span
+				>{/if}{t.label}</button
 		>
 	{/each}
 </div>
@@ -187,12 +195,39 @@
 	</section>
 {:else if race}
 	<div class="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-		<section class="card p-4">
+		<section
+			class="card p-4"
+			style:border-color={call ? callColor(call.party) : undefined}
+			style:box-shadow={call ? `inset 0 0 0 1px ${callColor(call.party)}` : undefined}
+		>
+			{#if call}
+				<div
+					class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-3 py-2"
+					style:background="color-mix(in srgb, {callColor(call.party)} 14%, transparent)"
+				>
+					<span
+						class="grid h-5 w-5 place-items-center rounded-full text-xs font-bold text-white"
+						style:background={callColor(call.party)}
+						aria-hidden="true">✓</span
+					>
+					<span class="text-sm font-semibold"
+						>{call.name} ({call.party}) wins<span class="text-muted ml-1.5 text-xs font-normal"
+							>Projected winner</span
+						></span
+					>
+					<span class="text-muted ml-auto text-xs">Called by NBC News</span>
+				</div>
+			{/if}
 			{#each [rep, dem] as c (c?.party)}
 				{#if c}
 					<div class="num mt-1 flex items-baseline justify-between gap-3">
 						<span
-							><b class="text-base {c.party === 'REP' ? 'text-rep' : 'text-dem'}">{c.name}</b>
+							>{#if call && call.party === c.party}<span
+									class="mr-1"
+									style:color={callColor(c.party)}
+									aria-label="projected winner">✓</span
+								>{/if}<b class="text-base {c.party === 'REP' ? 'text-rep' : 'text-dem'}">{c.name}</b
+							>
 							<span class="text-muted text-xs">{c.party}</span></span
 						>
 						<span

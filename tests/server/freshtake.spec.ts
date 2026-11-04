@@ -163,3 +163,36 @@ describe('FreshTake statewide race totals', () => {
 		]);
 	});
 });
+
+describe('race calls', () => {
+	it('reads called statewide and House races and skips uncalled ones', async () => {
+		const { parseCalls } = await import('../../src/lib/server/calls.ts');
+		const cand = (lastName: string, party: string, won: boolean) => ({
+			name: `X ${lastName}`,
+			lastName,
+			party,
+			isWinner: won,
+			callStatus: won ? 'P' : ''
+		});
+		const calls = parseCalls({
+			stateRaceResults: {
+				discreteOffices: [
+					{
+						officeCode: 'G',
+						candidates: [cand('Donalds', 'gop', true), cand('Jolly', 'dem', false)]
+					}
+				],
+				otherRaces: [{ officeCode: 'A', candidates: [cand('Uthmeier', 'gop', false)] }],
+				house: [
+					{ district: 22, candidates: [cand('Dandiya', 'dem', true), cand('Askar', 'gop', false)] },
+					{ district: 13, candidates: [cand('Luna', 'gop', false), cand('Gray', 'dem', false)] }
+				]
+			}
+		});
+		expect(calls.races).toEqual({
+			GOV: { name: 'X Donalds', lastName: 'Donalds', party: 'REP' },
+			'USR-22': { name: 'X Dandiya', lastName: 'Dandiya', party: 'DEM' }
+		});
+		expect(() => parseCalls({})).toThrow();
+	});
+});

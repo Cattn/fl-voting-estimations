@@ -54,6 +54,10 @@
 	const marginClass = (v: number) => (v < 0 ? 'text-rep' : 'text-dem');
 	const pct = (votes: number, r: DistrictResult) =>
 		r.race?.total ? (votes / r.race.total) * 100 : 0;
+	const callOf = (n: number) => data.calls[`USR-${n}`] ?? null;
+	const called = $derived(
+		rows.map((r) => callOf(r.district.n)).filter((c): c is NonNullable<typeof c> => !!c)
+	);
 	const tileColor = (r: DistrictResult) => {
 		if (r.district.uncontested)
 			return `color-mix(in srgb, ${partyColor(r.district.uncontested.party)} 95%, var(--surface))`;
@@ -113,7 +117,14 @@
 			{/each}
 		</div>
 		<p class="text-muted mt-1 text-xs">
-			{28 - repSeats - demSeats} unreported or tied
+			{28 - repSeats - demSeats} unreported or tied{#if called.length}
+				· Called: <span class="text-rep font-semibold"
+					>{called.filter((c) => c.party === 'REP').length} R</span
+				>,
+				<span class="text-dem font-semibold"
+					>{called.filter((c) => c.party === 'DEM').length} D</span
+				>
+				({28 - called.length} not yet){/if}
 		</p>
 	</section>
 	<section class="card p-4">
@@ -227,7 +238,11 @@
 				style:background={tileColor(r)}
 			>
 				<div class="flex flex-wrap justify-between gap-1">
-					<b>FL-{r.district.n}</b>
+					<b
+						>{#if callOf(r.district.n)}<span aria-label="called" title="Called by NBC News"
+								>✓
+							</span>{/if}FL-{r.district.n}</b
+					>
 					<span
 						>{r.district.uncontested
 							? 'Unc.'
@@ -253,7 +268,8 @@
 		{/each}
 	</div>
 	<p class="text-muted mt-2 text-xs">
-		One tile per district. Dashed outline = current margin within 5 points.
+		One tile per district. ✓ = projected winner called by NBC News. Dashed outline = current margin
+		within 5 points.
 	</p>
 </section>
 
@@ -293,6 +309,10 @@
 									: null}
 							<td class="pl-3 align-top">
 								<div class={i === 0 ? 'text-rep' : 'text-dem'}>
+									{#if callOf(r.district.n)?.party === (i === 0 ? 'REP' : 'DEM')}<span
+											aria-label="projected winner"
+											title="Projected winner (NBC News)">✓</span
+										>{/if}
 									{unopposed?.name ?? c?.name ?? '–'}
 								</div>
 								<div class="text-muted text-xs">

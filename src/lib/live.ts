@@ -10,7 +10,7 @@ import {
 import { ELECTION_DAY, marginOf } from './model.ts';
 import { countedMix, raceMargin, tallyRaces, type ResultRow } from './results.ts';
 import { electionClock } from './election-clock.ts';
-import type { County, FeedData, PartyCounts } from './types.ts';
+import type { County, FeedData, PartyCounts, RaceCalls } from './types.ts';
 
 export const ELECTION_REGISTRATION = {
 	rep: 5_687_032,
@@ -63,6 +63,7 @@ export interface ElectionRecord {
 	baseline: Baseline | null;
 	warnings: string[];
 	corrections?: { at: number; source: 'turnout' | 'results'; before: number; after: number }[];
+	calls?: RaceCalls;
 }
 
 export interface ElectionSnapshot {

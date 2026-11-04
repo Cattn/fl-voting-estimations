@@ -10,6 +10,7 @@ export const load: PageServerLoad = async ({ depends, parent }) => {
 		const snapshot = await getElectionSnapshot();
 		return {
 			results: snapshot.election.results,
+			calls: snapshot.election.calls?.races ?? {},
 			night: snapshot.election.night,
 			statewide: snapshot.data.statewide ?? null,
 			projectable: viewElection(snapshot, new Date(serverClock.now)).projectable
