@@ -99,6 +99,8 @@ export async function collectElection(
 				),
 				feed
 			);
+			if (!feed.statewide && previous?.data.statewide)
+				feed = { ...feed, statewide: previous.data.statewide };
 			record.warnings.push(...validateTurnout(feed, now));
 			record.sources.turnout = {
 				url: feed.source,

@@ -230,6 +230,6 @@ export function freshTakeFeed(ft: FreshTakeData, previous?: FeedData, now = new 
 }
 
 export async function fetchFreshTake(): Promise<FreshTakeData> {
-	const page = await sourceText(`${FRESHTAKE_URL}?t=${Date.now()}`, 3_000_000, 10_000);
+	const page = await sourceText(`${FRESHTAKE_URL}?t=${Date.now()}`, 3_000_000, 25_000);
 	return parseFreshTake(page.text);
 }
