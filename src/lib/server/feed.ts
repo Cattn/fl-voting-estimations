@@ -156,11 +156,19 @@ export async function fetchWithRetry(): Promise<FeedData> {
 }
 
 export async function fetchTurnout(previous?: FeedData, now = new Date()): Promise<FeedData> {
+	let primary: FeedData | null = null;
 	try {
-		return freshTakeFeed(await fetchFreshTake(), previous, now);
-	} catch (primary) {
-		console.error({ event: 'freshtake_fetch', error: (primary as Error).message });
-		return fetchWithRetry();
+		primary = freshTakeFeed(await fetchFreshTake(), previous, now);
+		if (now.getTime() - Date.parse(primary.fetchedAt) < 20 * 60_000) return primary;
+		console.error({ event: 'freshtake_fetch', error: `FreshTake is stale (${primary.fetchedAt})` });
+	} catch (e) {
+		console.error({ event: 'freshtake_fetch', error: (e as Error).message });
+	}
+	try {
+		return await fetchWithRetry();
+	} catch (e) {
+		if (primary) return primary;
+		throw e;
 	}
 }
 
