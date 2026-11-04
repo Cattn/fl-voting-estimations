@@ -363,7 +363,9 @@ function computeTurnoutEstimates(s: EdState): TurnoutEstimates {
 		influence += countyPriors[i].total * weight;
 		coverage += votes.total && share > 0 ? countyPriors[i].total * freshness : 0;
 		const remaining = { ...ZERO };
-		const complete = s.completedCounties?.includes(c.code) ?? false;
+		const complete =
+			(s.completedCounties?.includes(c.code) ?? false) ||
+			(s.phase === 'closed' && s.minute >= TURNOUT_SETTLED && votes.total > 0);
 		const pending = s.phase === 'closed' && s.turnoutFinal === false && !complete;
 		for (const k of turnoutKeys) {
 			const priorLeft = Math.max(0, countyPriors[i][k] - votes[k]);
@@ -488,6 +490,7 @@ export function edScenarios(
 		});
 }
 
+export const TURNOUT_SETTLED = 24 * 60 + 3 * 60;
 export const TREND_GAP = 20;
 export const INTRADAY_SHIFT = 7;
 export const SHIFT_WINDOW = 90;

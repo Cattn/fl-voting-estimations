@@ -58,6 +58,8 @@
 	const called = $derived(
 		rows.map((r) => callOf(r.district.n)).filter((c): c is NonNullable<typeof c> => !!c)
 	);
+	const counting = (r: DistrictResult) =>
+		!!r.race?.total && r.counted >= 1 && !r.district.uncontested && !callOf(r.district.n);
 	const tileColor = (r: DistrictResult) => {
 		if (r.district.uncontested)
 			return `color-mix(in srgb, ${partyColor(r.district.uncontested.party)} 95%, var(--surface))`;
@@ -173,7 +175,11 @@
 					<a class="font-semibold hover:underline" href="#district-{r.district.n}"
 						>FL-{r.district.n}</a
 					>
-					<span class="text-muted num text-xs">{Math.round(r.counted * 100)}% precincts</span>
+					<span class="text-muted num text-xs"
+						>{counting(r)
+							? 'All precincts in · still counting'
+							: `${Math.round(r.counted * 100)}% precincts`}</span
+					>
 				</div>
 				{#each [r.rep, r.dem] as c (c?.party)}
 					{#if c}
@@ -249,7 +255,9 @@
 							: !r.race?.total
 								? '–'
 								: view === 'counted'
-									? `${Math.round(r.counted * 100)}%`
+									? counting(r)
+										? 'Counting'
+										: `${Math.round(r.counted * 100)}%`
 									: fmtMargin(r.margin, 1)}</span
 					>
 				</div>
@@ -277,7 +285,9 @@
 	<h2 class="mb-3 flex items-center text-base font-semibold">
 		Results by district<Info align="left"
 			>Candidate votes include voters of every registration. 2024 Pres. is the 2024 presidential
-			margin on the 2026 lines; Shift is the change from it.</Info
+			margin on the 2026 lines; Shift is the change from it. Precincts at 100% means every precinct
+			has reported, but provisional, overseas and cured mail ballots can still be added until the
+			count is final.</Info
 		>
 	</h2>
 	<div class="overflow-x-auto">
@@ -332,7 +342,9 @@
 								>{r.race?.total ? fmtMargin(r.margin, 1) : '–'}</td
 							>
 							<td class="pl-3 text-right"
-								>{r.race?.total ? `${Math.round(r.counted * 100)}%` : '–'}</td
+								>{r.race?.total ? `${Math.round(r.counted * 100)}%` : '–'}{#if counting(r)}<span
+										class="text-muted block text-xs whitespace-nowrap">still counting</span
+									>{/if}</td
 							>
 						{/if}
 						<td class="pl-3 text-right {marginClass(-r.district.trump24)}"

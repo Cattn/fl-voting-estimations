@@ -48,19 +48,43 @@
 				: counted
 					? `${names}<br>${Math.round(r.counted * 100)}% precincts · shift ${fmtMargin(r.shift, 1)}`
 					: names || 'No votes yet';
+			const color = (v: number) => (v < 0 ? theme.palette.rep : theme.palette.dem);
+			const marginText = counted ? `2026 ${fmtMargin(r.margin, 1)}` : 'No votes yet';
+			const focus =
+				view === 'shift' && counted
+					? {
+							headline: [
+								{
+									label: 'Shift vs. 2024',
+									value: `${r.shift < 0 ? 'R' : 'D'} +${Math.abs(r.shift).toFixed(1)}`,
+									color: color(r.shift)
+								}
+							],
+							note: `${marginText} · 2024 ${pres(d.trump24)}`
+						}
+					: view === 'pres'
+						? {
+								headline: [
+									{ label: '2024 Pres.', value: pres(d.trump24), color: color(-d.trump24) }
+								],
+								note: d.uncontested ? `${d.uncontested.name}, uncontested` : marginText
+							}
+						: null;
 			return {
 				name: String(d.n),
 				title: `FL-${d.n}`,
 				value,
-				lines: counted
-					? [
-							{
-								label: 'Votes',
-								x: { rep: r.rep?.votes ?? 0, dem: r.dem?.votes ?? 0, total: r.race!.total }
-							}
-						]
-					: [],
-				note: `${status}<br>2024: ${pres(d.trump24)}`
+				...(focus ? { headline: focus.headline } : {}),
+				lines:
+					counted && !focus
+						? [
+								{
+									label: 'Votes',
+									x: { rep: r.rep?.votes ?? 0, dem: r.dem?.votes ?? 0, total: r.race!.total }
+								}
+							]
+						: [],
+				note: focus ? focus.note : `${status}<br>2024: ${pres(d.trump24)}`
 			};
 		})
 	);

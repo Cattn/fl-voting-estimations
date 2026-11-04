@@ -72,7 +72,9 @@
 			: null
 	);
 	const marginClass = (v: number) => (v < 0 ? 'text-rep' : 'text-dem');
-	const signed = (v: number) => `${v > 0 ? 'D' : 'R'} +${Math.abs(v).toFixed(1)}`;
+	const leaderAhead = $derived(
+		projection ? (leader?.party === 'REP' ? -projection.ahead : projection.ahead) : 0
+	);
 </script>
 
 <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -294,10 +296,21 @@
 						about 2 points ahead of an R+11 electorate.</Info
 					>
 				</div>
-				<div class="num mt-1 text-2xl font-semibold {marginClass(projection.ahead)}">
-					{signed(projection.ahead)} pts
+				<div
+					class="num mt-1 text-2xl font-semibold"
+					style:color={leaderAhead >= 0
+						? leader?.party === 'REP'
+							? 'var(--rep)'
+							: 'var(--dem)'
+						: leader?.party === 'REP'
+							? 'var(--dem)'
+							: 'var(--rep)'}
+				>
+					{leaderAhead >= 0 ? '+' : '−'}{Math.abs(leaderAhead).toFixed(1)} pts
 				</div>
-				<div class="text-2 text-sm">Ahead of party registration</div>
+				<div class="text-2 text-sm">
+					{leaderAhead >= 0 ? 'Ahead of' : 'Behind'} party registration
+				</div>
 			</section>
 			<section class="card p-4">
 				<div class="text-muted flex items-center text-xs font-medium tracking-wide uppercase">

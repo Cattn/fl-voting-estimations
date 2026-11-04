@@ -23,6 +23,7 @@ import {
 	RESULTS_START,
 	scaleCounts,
 	turnoutEstimates,
+	TURNOUT_SETTLED,
 	ZERO
 } from '../src/lib/election.ts';
 import { marginOf } from '../src/lib/model.ts';
@@ -623,5 +624,21 @@ describe('Election Day margin rows', () => {
 		expect(rows[1].added).toBeCloseTo(-20, 6);
 		expect(rows[2].added).toBeCloseTo(25, 6);
 		expect(rows[3].sofar).toBeCloseTo(((1500 - 1600) / 3100) * 100, 6);
+	});
+});
+
+describe('Settled turnout after election night', () => {
+	it('stops adding expected Election Day votes once the night is over', () => {
+		const { state } = sampleElection(feed, 1430);
+		const pending = {
+			...state,
+			phase: 'closed' as const,
+			turnoutFinal: false,
+			completedCounties: []
+		};
+		const night = turnoutEstimates({ ...pending, minute: 22 * 60 });
+		const morning = turnoutEstimates({ ...pending, minute: TURNOUT_SETTLED + 60 });
+		expect(night.live.turnout.total).toBeGreaterThanOrEqual(state.eday.total);
+		expect(morning.live.turnout.total).toBeCloseTo(state.eday.total, 0);
 	});
 });

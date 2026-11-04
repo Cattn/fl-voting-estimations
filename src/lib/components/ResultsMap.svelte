@@ -48,15 +48,51 @@
 			];
 		})
 	);
+	const repName = $derived(race.candidates.find((c) => c.party === 'REP')?.name ?? 'Republican');
+	const demName = $derived(race.candidates.find((c) => c.party === 'DEM')?.name ?? 'Democrat');
+	const pts = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} pts`;
 	const mapRows = $derived<MapRow[]>(
 		rows.map((r) => {
 			const rep = lead(r.tally.candidates, 'REP');
 			const dem = lead(r.tally.candidates, 'DEM');
-			return {
+			const base = {
 				name: r.name,
 				value: r.tally.total ? r[activeView] : 0,
 				lines: [{ label: 'Votes', x: { rep, dem, total: r.tally.total } }],
-				note: `Est. ${Math.round(r.counted * 100)}% counted · ahead of party ${fmtMargin(r.ahead)} · vs. 2024 ${fmtMargin(r.shift)}`
+				note: `Est. ${Math.round(r.counted * 100)}% counted · ${fmtInt(r.tally.total)} votes`
+			};
+			if (!r.tally.total || activeView === 'margin') return base;
+			const color = (v: number) => (v < 0 ? theme.palette.rep : theme.palette.dem);
+			const pres24 = r.margin - r.shift;
+			const presText =
+				pres24 < 0 ? `Trump +${(-pres24).toFixed(1)}` : `Harris +${pres24.toFixed(1)}`;
+			if (activeView === 'ahead') {
+				const repLeads = r.margin < 0;
+				const value = repLeads ? -r.ahead : r.ahead;
+				return {
+					...base,
+					lines: [],
+					headline: [
+						{
+							label: `${repLeads ? repName : demName} vs. party`,
+							value: pts(value),
+							color: value >= 0 ? color(r.margin) : theme.palette.muted
+						}
+					],
+					note: `2026 ${fmtMargin(r.margin, 1)} · registration ${fmtMargin(r.registration, 1)}`
+				};
+			}
+			return {
+				...base,
+				lines: [],
+				headline: [
+					{
+						label: 'Shift vs. 2024',
+						value: `${r.shift < 0 ? 'R' : 'D'} +${Math.abs(r.shift).toFixed(1)}`,
+						color: color(r.shift)
+					}
+				],
+				note: `2026 ${fmtMargin(r.margin, 1)} · 2024 ${presText}`
 			};
 		})
 	);

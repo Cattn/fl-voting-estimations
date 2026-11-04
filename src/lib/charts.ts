@@ -375,6 +375,7 @@ export interface MapRow {
 	value: number;
 	lines: { label: string; x: { rep: number; dem: number; total: number } }[];
 	note: string;
+	headline?: { label: string; value: string; color: string }[];
 }
 
 const niceMax = (v: number) => {
@@ -402,7 +403,13 @@ export function mapOption(
 				if (!d) return '';
 				const line = (label: string, x: { rep: number; dem: number; total: number }) =>
 					`<div style="display:flex;gap:12px;justify-content:space-between"><span>${label}</span><span><b style="color:${signColor(p, marginOf(x))}">${fmtMargin(marginOf(x))}</b> <span style="color:${p.muted}">${fmtInt(x.total)}</span></span></div>`;
-				return `<div style="min-width:200px"><div style="font-weight:600;margin-bottom:4px">${d.title ?? d.name}</div>${d.lines.map((l) => line(l.label, l.x)).join('')}<div style="color:${p.muted};font-size:11px;margin-top:4px">${d.note}</div></div>`;
+				const head = (d.headline ?? [])
+					.map(
+						(h) =>
+							`<div style="display:flex;gap:12px;justify-content:space-between;font-size:14px;margin-bottom:2px"><span>${h.label}</span><b style="color:${h.color}">${h.value}</b></div>`
+					)
+					.join('');
+				return `<div style="min-width:200px"><div style="font-weight:600;margin-bottom:4px">${d.title ?? d.name}</div>${head}${d.headline?.length ? '<div style="opacity:.8;font-size:11px;margin-top:4px">' : ''}${d.lines.map((l) => line(l.label, l.x)).join('')}${d.headline?.length ? '</div>' : ''}<div style="color:${p.muted};font-size:11px;margin-top:4px">${d.note}</div></div>`;
 			}
 		},
 		visualMap:
