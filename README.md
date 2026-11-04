@@ -11,10 +11,12 @@
 </p>
 
 <p align="center">
-    Tracks Florida 2026 voting (IPEV + returned mail) by party and lets you build forecasts of the final electorate, with daily benchmarks for the remaining early-voting days.
+    Tracks Florida 2026 voting by party registration, turnout, and more! It then displays all of that information through various charts and datapoints, making analyzing the vote trends easier!
 </p>
 
-Data comes from [acorn-maple-earth-lake.grok.me](https://acorn-maple-earth-lake.grok.me/). The server reads the dataset embedded in that page, caches it for 3 minutes, and keeps the last good snapshot in Cloudflare KV so a slow or empty source never blocks the page.
+> Note: During the Early Voting & Election day period, this tool also offered live projections, forecasts, and more! Those tools are disabled now that this period is over, but the model used for them is still in place for any outstanding votes. The original projected final electorate by my model was R+8.5, with the true final being R+8.73!
+
+Data comes from various official sources, as well as FreshTake and more. The server reads the dataset embedded in those pages, caches it for 3 minutes, and keeps the last good snapshot in Cloudflare KV so a slow or empty source never blocks the page.
 
 ## Develop
 
